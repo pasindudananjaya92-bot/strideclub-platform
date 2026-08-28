@@ -1,0 +1,7 @@
+{
+  "name": "Running Club",
+  "description": "A full-scale Running Club Platform with multi-page navigation, Cloud SQL persistence in asia-southeast1, Gemini AI Coach, Integrations Vault with AES-256 encryption, and athletic community feed.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

@@ -1,0 +1,126 @@
+{
+  "name": "StrideClub & Pasiya Max - Autonomous Social Media Auto-Poster",
+  "version": 1,
+  "description": "Receives autonomous athlete milestones, viral graphics, and running workouts from StrideClub Agent and automatically broadcasts them to Telegram, Facebook, YouTube Community, Instagram, and WhatsApp.",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true
+    }
+  },
+  "modules": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": "strideclub_social_autopost_webhook"
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "StrideClub Agent Webhook Ingest"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "router:router",
+      "version": 1,
+      "parameters": {},
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "Platform Router (Telegram / FB / IG / YT)"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "telegram:sendPhoto",
+      "version": 1,
+      "parameters": {
+        "chat_id": "@goldenbotmdchannel",
+        "photo": "{{1.imageUrl}}",
+        "caption": "{{1.caption}}\n\n{{1.hashtags}}\n\n📲 Join our community: {{1.pasiyaMaxLinks.whatsappChannel}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": -150,
+          "name": "Broadcast to Telegram Channel"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "facebook:createAPost",
+      "version": 1,
+      "parameters": {
+        "message": "{{1.caption}}\n\n{{1.hashtags}}\n\n🏃 Follow on YouTube: {{1.pasiyaMaxLinks.youtube}}",
+        "link": "{{1.pasiyaMaxLinks.facebook}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0,
+          "name": "Publish to Facebook Page / Group"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:makeARequest",
+      "version": 1,
+      "parameters": {
+        "url": "https://api.whatsapp.com/send",
+        "method": "POST",
+        "body": {
+          "text": "{{1.caption}}\n\nJoin: {{1.pasiyaMaxLinks.whatsappGroup}}"
+        }
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 150,
+          "name": "Dispatch to WhatsApp Community"
+        }
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": 1,
+      "to": 2
+    },
+    {
+      "from": 2,
+      "to": 3,
+      "filter": {
+        "name": "Route if Telegram or All",
+        "formula": "{{1.platform}} = 'telegram' || {{1.platform}} = 'all'"
+      }
+    },
+    {
+      "from": 2,
+      "to": 4,
+      "filter": {
+        "name": "Route if Facebook or All",
+        "formula": "{{1.platform}} = 'facebook' || {{1.platform}} = 'all'"
+      }
+    },
+    {
+      "from": 2,
+      "to": 5,
+      "filter": {
+        "name": "Route if WhatsApp",
+        "formula": "{{1.platform}} = 'whatsapp'"
+      }
+    }
+  ]
+}
