@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "vite build \u0026\u0026 esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "dev": "tsx server.ts",
     "lint": "tsc --noEmit",
@@ -27,8 +27,7 @@
     "pg": "^8.23.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "recharts": "^3.10.1",
-    "vite": "^6.2.3"
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@types/archiver": "^8.0.0",
@@ -43,4 +42,4 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
   }
-}
+} 
