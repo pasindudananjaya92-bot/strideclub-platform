@@ -13,7 +13,7 @@
   "crons": [
     {
       "path": "/api/cron/agent-orchestrator",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "routes": [
@@ -41,4 +41,4 @@
       ]
     }
   ]
-}
+} 
