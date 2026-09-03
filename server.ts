@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import * as dotenv from 'dotenv';
-import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { requireAuth, optionalAuthOrDemo, AuthRequest } from './src/middleware/auth.ts';
 import { createRun, getUserRuns, deleteRun, getLeaderboard, getClubStats } from './src/db/runs.ts';
 import { getUserByUid } from './src/db/users.ts';
 import {
@@ -143,8 +143,8 @@ async function startServer() {
     }
   });
 
-  // Log a new run
-  app.post('/api/runs', requireAuth, async (req: AuthRequest, res) => {
+  // Log a new run (Updated with optionalAuthOrDemo to fallback to demo user id=1 when token is missing)
+  app.post('/api/runs', optionalAuthOrDemo, async (req: AuthRequest, res) => {
     try {
       const { title, distanceKm, durationSeconds, runDate, notes, surfaceType } = req.body;
 
@@ -169,7 +169,7 @@ async function startServer() {
 
       const newRun = await createRun({
         userId: req.dbUser!.id,
-        userUid: req.user!.uid,
+        userUid: req.user?.uid || req.dbUser!.uid,
         title: title.trim(),
         distanceKm: dist,
         durationSeconds: dur,
@@ -361,7 +361,6 @@ async function startServer() {
   });
 
   // --- MANUAL & CRON AUTONOMOUS SYSTEM TRIGGERS ---
-  // System 1: Auto AI Coach
   app.post('/api/agent/trigger/ai-coach', async (req, res) => {
     try {
       const result = await runAutoAiCoachSystem();
@@ -372,7 +371,6 @@ async function startServer() {
     }
   });
 
-  // System 2: Auto Community Moderator
   app.post('/api/agent/trigger/community-moderator', async (req, res) => {
     try {
       const result = await runAutoCommunityModeratorSystem();
@@ -383,7 +381,6 @@ async function startServer() {
     }
   });
 
-  // System 3: Auto Events & Reminders
   app.post('/api/agent/trigger/events-reminders', async (req, res) => {
     try {
       const result = await runAutoEventsAndRemindersSystem();
@@ -394,7 +391,6 @@ async function startServer() {
     }
   });
 
-  // System 4: Auto Data Sync (Strava / n8n Webhook runner)
   app.post('/api/agent/trigger/data-sync', async (req, res) => {
     try {
       const result = await runAutoDataSyncSystem();
@@ -405,7 +401,6 @@ async function startServer() {
     }
   });
 
-  // System 5 / Full Cycle Cron
   app.post('/api/agent/trigger/full-cycle', async (req, res) => {
     try {
       const result = await runFullAutonomousCycle();
@@ -417,12 +412,10 @@ async function startServer() {
   });
 
   // --- REPLIT & N8N MULTI-AGENT ORCHESTRATION ENDPOINTS ---
-  // List all DAG Workflows
   app.get('/api/agent/workflows', (req, res) => {
     res.json({ workflows: DEFAULT_WORKFLOWS });
   });
 
-  // Replit-Style Multi-Agent Autonomous Problem Solver
   app.post('/api/agent/solve', async (req, res) => {
     try {
       const { prompt, athleteContext, userId } = req.body;
@@ -443,14 +436,12 @@ async function startServer() {
     }
   });
 
-  // Live Multi-Agent Execution Traces
   app.get('/api/agent/traces', (req, res) => {
     const traces = getRecentExecutionTraces();
     res.json({ traces });
   });
 
   // --- GITHUB AUTONOMOUS AGENT ENDPOINTS ---
-  // Check connection status to GitHub Repository
   app.get('/api/agent/github/status', async (req, res) => {
     try {
       const status = await checkGitHubStatus();
@@ -460,7 +451,6 @@ async function startServer() {
     }
   });
 
-  // List repository directory files
   app.get('/api/agent/github/files', async (req, res) => {
     try {
       const dirPath = (req.query.path as string) || '';
@@ -471,7 +461,6 @@ async function startServer() {
     }
   });
 
-  // Direct autonomous single file commit/upload to GitHub repo
   app.post('/api/agent/github/commit-file', async (req, res) => {
     try {
       const { filePath, content, commitMessage, branch } = req.body;
@@ -493,7 +482,6 @@ async function startServer() {
     }
   });
 
-  // Direct autonomous batch file upload to GitHub repo (Upload multiple selected files or whole project)
   app.post('/api/agent/github/upload-files', async (req, res) => {
     try {
       const { files, commitMessage, branch } = req.body;
@@ -515,12 +503,10 @@ async function startServer() {
   });
 
   // --- SOCIAL MEDIA AUTO-POSTER & MAKE.COM ENDPOINTS ---
-  // Get official Pasiya Max social media links
   app.get('/api/agent/social/links', (req, res) => {
     res.json({ links: PASIYA_MAX_SOCIAL_LINKS });
   });
 
-  // Generate viral social media draft with Gemini
   app.post('/api/agent/social/generate-post', async (req, res) => {
     try {
       const { topic, platform, language, workoutMilestone } = req.body;
@@ -537,7 +523,6 @@ async function startServer() {
     }
   });
 
-  // Dispatch post to Make.com free tier webhook
   app.post('/api/agent/social/dispatch-webhook', async (req, res) => {
     try {
       const { webhookUrl, post, imageUrl } = req.body;
@@ -553,7 +538,6 @@ async function startServer() {
     }
   });
 
-  // Download Make.com Scenario Blueprint JSON
   app.get('/api/export/make-blueprint', (req, res) => {
     try {
       const filePath = path.join(process.cwd(), 'make', 'make-social-autoposter-blueprint.json');
@@ -563,8 +547,6 @@ async function startServer() {
     }
   });
 
-  // --- VERCEL & SUPABASE CRON ORCHESTRATOR ENDPOINT ---
-  // Can be called by Vercel Cron or Supabase pg_cron directly without n8n
   app.all('/api/cron/agent-orchestrator', async (req, res) => {
     try {
       const result = await runFullAutonomousCycle();
@@ -581,7 +563,6 @@ async function startServer() {
   });
 
   // --- INTEGRATIONS HUB ENDPOINTS ---
-  // List connected integrations
   app.get('/api/integrations', requireAuth, async (req: AuthRequest, res) => {
     try {
       const list = await getUserIntegrations(req.user!.uid);
@@ -592,7 +573,6 @@ async function startServer() {
     }
   });
 
-  // Save / update an integration (encrypted before DB write)
   app.post('/api/integrations', requireAuth, async (req: AuthRequest, res) => {
     try {
       const { serviceName, serviceLabel, apiKey, apiSecret, endpointUrl, configData } = req.body;
@@ -618,7 +598,6 @@ async function startServer() {
     }
   });
 
-  // Delete an integration
   app.delete('/api/integrations/:id', requireAuth, async (req: AuthRequest, res) => {
     try {
       const id = parseInt(req.params.id, 10);
@@ -633,7 +612,6 @@ async function startServer() {
     }
   });
 
-  // Test integration connection / webhook ping
   app.post('/api/integrations/:id/test', requireAuth, async (req: AuthRequest, res) => {
     try {
       const id = parseInt(req.params.id, 10);
@@ -774,3 +752,4 @@ async function startServer() {
 }
 
 startServer();
+ 
