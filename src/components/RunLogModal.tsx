@@ -142,12 +142,17 @@ export const RunLogModal: React.FC<RunLogModalProps> = ({
 
     try {
       setSubmitting(true);
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/runs', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           title: title.trim(),
           distanceKm: distNum,
@@ -502,7 +507,7 @@ export const RunLogModal: React.FC<RunLogModalProps> = ({
               <button
                 id="btn-submit-run"
                 type="submit"
-                disabled={submitting || !user}
+                disabled={submitting}
                 className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center space-x-2"
               >
                 {submitting ? (
@@ -520,4 +525,5 @@ export const RunLogModal: React.FC<RunLogModalProps> = ({
       </div>
     </AnimatePresence>
   );
-}; 
+};
+ 
