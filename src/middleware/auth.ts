@@ -14,15 +14,6 @@ export interface AuthRequest extends Request {
   };
 }
 
-/** Demo user when no Firebase session (matches Supabase users.id = 1) */
-export const DEMO_DB_USER = {
-  id: 1,
-  uid: 'demo-user',
-  email: 'demo@strideclub.local',
-  displayName: 'Pasiya Max ⚡',
-  photoUrl: null as string | null,
-};
-
 export const requireAuth = async (
   req: AuthRequest,
   res: Response,
@@ -54,8 +45,9 @@ export const requireAuth = async (
 };
 
 /**
- * Auth if token present; otherwise continue as demo user (id: 1).
- * Use for Log Run so anonymous/demo sessions can still write to Supabase.
+ * Token තියෙනවා නම් real user.
+ * නැති නම් Supabase එකේ uid=demo-user row එක resolve / create කරලා ඒ id එක use කරනවා.
+ * Numeric id hardcode කරන්නේ නැහැ (id 1 vs 6 ගැටලුව නැති වෙනවා).
  */
 export const optionalAuthOrDemo = async (
   req: AuthRequest,
@@ -64,9 +56,32 @@ export const optionalAuthOrDemo = async (
 ) => {
   const authHeader = req.headers.authorization;
 
+  const useDemoUser = async () => {
+    const demo = await getOrCreateUser(
+      'demo-user',
+      'demo@strideclub.local',
+      'Pasiya Max ⚡',
+      null
+    );
+    req.dbUser = {
+      id: demo.id,
+      uid: demo.uid,
+      email: demo.email,
+      displayName: demo.displayName ?? 'Pasiya Max ⚡',
+      photoUrl: demo.photoUrl ?? null,
+    };
+  };
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    req.dbUser = DEMO_DB_USER;
-    return next();
+    try {
+      await useDemoUser();
+      return next();
+    } catch (error) {
+      console.error('Failed to resolve demo user:', error);
+      return res.status(500).json({
+        error: 'Demo user could not be resolved in database. Check DATABASE_URL and public.users.',
+      });
+    }
   }
 
   const token = authHeader.split('Bearer ')[1];
@@ -83,9 +98,13 @@ export const optionalAuthOrDemo = async (
     req.dbUser = dbUser;
     return next();
   } catch (error) {
-    console.warn('Token invalid — falling back to demo user id=1');
-    req.dbUser = DEMO_DB_USER;
-    return next();
+    console.warn('Token invalid — falling back to demo user by uid');
+    try {
+      await useDemoUser();
+      return next();
+    } catch (demoErr) {
+      console.error('Demo fallback failed:', demoErr);
+      return res.status(401).json({ error: 'Unauthorized: Invalid authentication session' });
+    }
   }
-};
- 
+}; 
