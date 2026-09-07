@@ -86,7 +86,7 @@ Respond in pure JSON:
 }`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     contents: prompt,
     config: {
       temperature: 0.7,
@@ -149,7 +149,9 @@ export async function dispatchToMakeWebhook(params: {
     return {
       success: res.ok,
       status: res.status,
-      message: res.ok ? 'Successfully dispatched to Make.com workflow!' : `Make.com responded with HTTP ${res.status}`,
+      message: res.ok
+        ? 'Successfully dispatched to Make.com workflow!'
+        : `Make.com responded with HTTP ${res.status}`,
     };
   } catch (error: any) {
     return {
