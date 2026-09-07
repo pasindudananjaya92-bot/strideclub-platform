@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { ClubEventItem, UserProfile } from '../types.ts';
+import { useAuth } from '../context/AuthContext.tsx';
 
 interface EventsViewProps {
   currentUser: UserProfile | null;
@@ -22,6 +23,7 @@ interface EventsViewProps {
 }
 
 export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify }) => {
+  const { token } = useAuth();
   const [events, setEvents] = useState<ClubEventItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -83,26 +85,39 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) {
-      onNotify?.('Please sign in to schedule club events', 'error');
-      return;
-    }
 
     if (!title || !description || !location || !eventDate || !eventTime) {
       onNotify?.('Please fill in all required event fields', 'error');
       return;
     }
 
+    // type="date" already YYYY-MM-DD; normalize if user pasted dd/mm/yyyy
+    let normalizedDate = eventDate.trim();
+    const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(normalizedDate);
+    if (dmy) {
+      const [, dd, mm, yyyy] = dmy;
+      normalizedDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+      onNotify?.('Date must be YYYY-MM-DD (use the date picker)', 'error');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch('/api/events', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           title,
           description,
           location,
-          eventDate,
+          eventDate: normalizedDate,
           eventTime,
           distanceKm: parseFloat(distanceKm) || 10,
           paceCategory,
@@ -112,15 +127,20 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
       if (res.ok) {
         onNotify?.('Club Event scheduled! Auto-reminder agent configured.', 'success');
         setIsModalOpen(false);
-        // Reset form
         setTitle('');
         setDescription('');
         setLocation('');
         setEventDate('');
         fetchEvents();
       } else {
-        const err = await res.json();
-        onNotify?.(err.error || 'Failed to schedule event', 'error');
+        let msg = 'Failed to schedule event';
+        try {
+          const err = await res.json();
+          msg = err.error || msg;
+        } catch {
+          msg = `Failed to schedule event (HTTP ${res.status})`;
+        }
+        onNotify?.(msg, 'error');
       }
     } catch (err: any) {
       onNotify?.(err.message || 'Error creating event', 'error');
@@ -190,7 +210,8 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
                         weekday: 'long',
                         month: 'short',
                         day: 'numeric',
-                      })} • {event.eventTime}
+                      })}{' '}
+                      • {event.eventTime}
                     </span>
                     <h3 className="text-xl font-bold text-slate-100 group-hover:text-amber-400 transition-colors">
                       {event.title}
@@ -202,9 +223,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
                   </span>
                 </div>
 
-                <p className="text-sm text-slate-300 leading-relaxed mb-4">
-                  {event.description}
-                </p>
+                <p className="text-sm text-slate-300 leading-relaxed mb-4">{event.description}</p>
 
                 <div className="space-y-2 text-xs text-slate-400 pt-3 border-t border-slate-800/80">
                   <div className="flex items-center gap-2 text-slate-300">
@@ -213,11 +232,16 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <Flame className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>Pace Bracket: <strong className="text-slate-300">{event.paceCategory}</strong></span>
+                    <span>
+                      Pace Bracket: <strong className="text-slate-300">{event.paceCategory}</strong>
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
                     <Users className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span><strong className="text-indigo-300 font-mono">{event.rsvpsCount}</strong> Athletes Attending</span>
+                    <span>
+                      <strong className="text-indigo-300 font-mono">{event.rsvpsCount}</strong> Athletes
+                      Attending
+                    </span>
                   </div>
                 </div>
               </div>
@@ -353,7 +377,8 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
               </div>
 
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs">
-                ⚡ <strong>Autonomous Agent Dispatch:</strong> When scheduled, Pasiya Agent will monitor RSVPs and send Saturday 7:00 PM reminder notifications to all confirmed athletes.
+                ⚡ <strong>Autonomous Agent Dispatch:</strong> When scheduled, Pasiya Agent will monitor RSVPs and
+                send Saturday 7:00 PM reminder notifications to all confirmed athletes.
               </div>
 
               <div className="pt-3 flex items-center justify-end gap-2">
