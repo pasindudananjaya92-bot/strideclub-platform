@@ -65,19 +65,15 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  // JSON and URL-encoded request body parser with 50MB limit for Multimodal Photos/Videos
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-  // Seed default club events if database is empty
   seedDefaultEventsIfEmpty().catch((err) => console.error('Error in seedDefaultEventsIfEmpty:', err));
 
-  // API Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
-  // Export full project code zip for GitHub
   app.get('/api/export/project-zip', (req, res) => {
     try {
       streamProjectZip(res);
@@ -87,7 +83,6 @@ async function startServer() {
     }
   });
 
-  // Get current authenticated user profile
   app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res) => {
     try {
       const user = await getUserByUid(req.user!.uid);
@@ -98,7 +93,6 @@ async function startServer() {
     }
   });
 
-  // User Dashboard & Badges
   app.get('/api/dashboard', requireAuth, async (req: AuthRequest, res) => {
     try {
       const dashboard = await getUserDashboardData(req.user!.uid);
@@ -112,7 +106,6 @@ async function startServer() {
     }
   });
 
-  // Update User Profile / Settings
   app.put('/api/user/profile', requireAuth, async (req: AuthRequest, res) => {
     try {
       const { displayName, bio, city, shoeModel, unitPreference, weeklyGoalKm, targetPaceMinPerKm } = req.body;
@@ -132,7 +125,6 @@ async function startServer() {
     }
   });
 
-  // Get logged-in user's runs
   app.get('/api/runs', requireAuth, async (req: AuthRequest, res) => {
     try {
       const userRuns = await getUserRuns(req.user!.uid);
@@ -143,7 +135,6 @@ async function startServer() {
     }
   });
 
-  // Log a new run (Updated with optionalAuthOrDemo to fallback to demo user id=1 when token is missing)
   app.post('/api/runs', optionalAuthOrDemo, async (req: AuthRequest, res) => {
     try {
       const { title, distanceKm, durationSeconds, runDate, notes, surfaceType } = req.body;
@@ -164,8 +155,7 @@ async function startServer() {
         return res.status(400).json({ error: 'Duration must be greater than 0 seconds' });
       }
 
-      // Calculate pace in minutes per km
-      const paceMinPerKm = (dur / 60) / dist;
+      const paceMinPerKm = dur / 60 / dist;
 
       const newRun = await createRun({
         userId: req.dbUser!.id,
@@ -186,7 +176,6 @@ async function startServer() {
     }
   });
 
-  // Delete a run
   app.delete('/api/runs/:id', requireAuth, async (req: AuthRequest, res) => {
     try {
       const runId = parseInt(req.params.id, 10);
@@ -206,7 +195,6 @@ async function startServer() {
     }
   });
 
-  // Public/Club Leaderboard
   app.get('/api/leaderboard', async (req, res) => {
     try {
       const period = (req.query.period as 'all' | 'month' | 'week') || 'all';
@@ -218,7 +206,6 @@ async function startServer() {
     }
   });
 
-  // Club aggregated stats
   app.get('/api/stats', async (req, res) => {
     try {
       const stats = await getClubStats();
@@ -229,7 +216,6 @@ async function startServer() {
     }
   });
 
-  // --- USER NOTIFICATIONS (Pasiya AI Plans, Reminders, Moderation Warnings, Strava Sync) ---
   app.get('/api/notifications', requireAuth, async (req: AuthRequest, res) => {
     try {
       const list = await getUserNotifications(req.user!.uid);
@@ -261,7 +247,6 @@ async function startServer() {
     }
   });
 
-  // --- CLUB EVENTS & RSVPS (System 3) ---
   app.get('/api/events', async (req, res) => {
     try {
       const userUid = (req.query.userUid as string) || undefined;
@@ -273,7 +258,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/events', requireAuth, async (req: AuthRequest, res) => {
+  app.post('/api/events', optionalAuthOrDemo, async (req: AuthRequest, res) => {
     try {
       const { title, description, location, eventDate, eventTime, distanceKm, paceCategory } = req.body;
       if (!title || !description || !location || !eventDate || !eventTime) {
@@ -288,7 +273,7 @@ async function startServer() {
         eventTime,
         distanceKm: distanceKm ? parseFloat(distanceKm) : 10,
         paceCategory,
-        createdByUid: req.user!.uid,
+        createdByUid: req.user?.uid || req.dbUser!.uid,
       });
 
       res.status(201).json({ event: newEvent });
@@ -315,7 +300,6 @@ async function startServer() {
     }
   });
 
-  // --- AUTONOMOUS AGENTS TELEMETRY & LOGS (System 5) ---
   app.get('/api/agent/logs', async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string, 10) || 60;
@@ -360,7 +344,6 @@ async function startServer() {
     }
   });
 
-  // --- MANUAL & CRON AUTONOMOUS SYSTEM TRIGGERS ---
   app.post('/api/agent/trigger/ai-coach', async (req, res) => {
     try {
       const result = await runAutoAiCoachSystem();
@@ -411,7 +394,6 @@ async function startServer() {
     }
   });
 
-  // --- REPLIT & N8N MULTI-AGENT ORCHESTRATION ENDPOINTS ---
   app.get('/api/agent/workflows', (req, res) => {
     res.json({ workflows: DEFAULT_WORKFLOWS });
   });
@@ -441,7 +423,6 @@ async function startServer() {
     res.json({ traces });
   });
 
-  // --- GITHUB AUTONOMOUS AGENT ENDPOINTS ---
   app.get('/api/agent/github/status', async (req, res) => {
     try {
       const status = await checkGitHubStatus();
@@ -502,7 +483,6 @@ async function startServer() {
     }
   });
 
-  // --- SOCIAL MEDIA AUTO-POSTER & MAKE.COM ENDPOINTS ---
   app.get('/api/agent/social/links', (req, res) => {
     res.json({ links: PASIYA_MAX_SOCIAL_LINKS });
   });
@@ -562,7 +542,6 @@ async function startServer() {
     }
   });
 
-  // --- INTEGRATIONS HUB ENDPOINTS ---
   app.get('/api/integrations', requireAuth, async (req: AuthRequest, res) => {
     try {
       const list = await getUserIntegrations(req.user!.uid);
@@ -623,7 +602,6 @@ async function startServer() {
     }
   });
 
-  // --- COMMUNITY DISCUSSION POSTS ---
   app.get('/api/community/posts', async (req, res) => {
     try {
       const posts = await getCommunityPosts();
@@ -669,7 +647,6 @@ async function startServer() {
     }
   });
 
-  // --- AI CLUB COACH (GEMINI API) ---
   app.post('/api/ai/coach', async (req, res) => {
     try {
       const { prompt, history, userContext } = req.body;
@@ -683,12 +660,12 @@ async function startServer() {
       console.error('Error calling AI Coach:', error);
       res.status(500).json({
         error: error.message || 'AI Coach service encountered an issue',
-        answer: 'Coach Tip: Take it step-by-step! Warm up with 5 minutes of dynamic stretches before picking up your stride.',
+        answer:
+          'Coach Tip: Take it step-by-step! Warm up with 5 minutes of dynamic stretches before picking up your stride.',
       });
     }
   });
 
-  // --- MULTIMODAL PHOTO & VIDEO DEEP ANALYSIS (GEMINI 2.5 FLASH VISION) ---
   app.post('/api/ai/multimodal-analyze', async (req, res) => {
     try {
       const { mediaBase64, mimeType, userPrompt, analysisType } = req.body;
@@ -708,12 +685,12 @@ async function startServer() {
       console.error('Multimodal Analysis Server Error:', error);
       res.status(500).json({
         error: error.message || 'Failed to analyze media',
-        analysis: 'Coach Note: Unable to complete visual inspection right now. Please ensure image/video is clear and in a supported format.',
+        analysis:
+          'Coach Note: Unable to complete visual inspection right now. Please ensure image/video is clear and in a supported format.',
       });
     }
   });
 
-  // --- GOOGLE SEARCH WEATHER LOOKUP FOR RUNS ---
   app.post('/api/weather/lookup', async (req, res) => {
     try {
       const { location, date } = req.body;
@@ -731,7 +708,6 @@ async function startServer() {
     }
   });
 
-  // Vite development middleware or production static asset server
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -751,5 +727,4 @@ async function startServer() {
   });
 }
 
-startServer();
- 
+startServer(); 
