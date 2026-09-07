@@ -75,28 +75,25 @@ export interface MultiAgentExecutionTrace {
   finalOutput: any;
 }
 
-// Global in-memory trace buffer for real-time WebSocket / polling visualization
 const recentExecutionTraces: MultiAgentExecutionTrace[] = [];
 
 export function getRecentExecutionTraces(): MultiAgentExecutionTrace[] {
   return [...recentExecutionTraces].slice(0, 30);
 }
 
-/**
- * Built-in Agent Workflows (Modeled after n8n / Replit Agent architectures)
- */
 export const DEFAULT_WORKFLOWS: AgentWorkflowDefinition[] = [
   {
     id: 'wf-auto-coach',
     name: 'Autonomous 7-Day Microcycle Synthesis',
     category: 'coaching',
-    description: 'Decomposes athlete history, queries Cloud SQL/Supabase, uses Gemini to plan VO2 max intervals and tempo blocks, verifies physiology limits, and writes notifications.',
+    description:
+      'Decomposes athlete history, queries Cloud SQL/Supabase, uses Gemini to plan VO2 max intervals and tempo blocks, verifies physiology limits, and writes notifications.',
     scheduleCron: '0 6 * * 1 (Every Monday 6:00 AM)',
     isEnabled: true,
     nodes: [
       { id: 'node-cron', type: 'trigger', label: 'Cloud Scheduler Trigger', service: 'Cron / Webhook', status: 'idle' },
       { id: 'node-fetch-db', type: 'tool', label: 'Fetch Athlete Metrics', service: 'Cloud SQL / Supabase', status: 'idle' },
-      { id: 'node-planner', type: 'agent', label: 'Pasiya Planner Agent', service: 'Gemini 2.5 Flash', status: 'idle' },
+      { id: 'node-planner', type: 'agent', label: 'Pasiya Planner Agent', service: 'Gemini 3.6 Flash', status: 'idle' },
       { id: 'node-weather', type: 'tool', label: 'Grounding Weather Tool', service: 'Google Search API', status: 'idle' },
       { id: 'node-verifier', type: 'agent', label: 'Replit Critic & Verifier', service: 'Physiology Guardrails', status: 'idle' },
       { id: 'node-sink-notify', type: 'sink', label: 'In-App Notification Sink', service: 'PostgreSQL / UI Stream', status: 'idle' },
@@ -113,7 +110,8 @@ export const DEFAULT_WORKFLOWS: AgentWorkflowDefinition[] = [
     id: 'wf-auto-mod',
     name: 'Real-time Community Safety & Toxic Filter',
     category: 'moderation',
-    description: 'Event-driven webhook scans new posts, identifies spam/phishing/abuse, executes automated remediation, and logs audit telemetry.',
+    description:
+      'Event-driven webhook scans new posts, identifies spam/phishing/abuse, executes automated remediation, and logs audit telemetry.',
     scheduleCron: '0 * * * * (Every 1 Hour)',
     isEnabled: true,
     nodes: [
@@ -135,7 +133,8 @@ export const DEFAULT_WORKFLOWS: AgentWorkflowDefinition[] = [
     id: 'wf-auto-sync',
     name: 'Encrypted Strava / Webhook Vault Synchronizer',
     category: 'sync',
-    description: 'Autonomous sync agent decrypts AES-256-GCM tokens, ingests activities, evaluates milestone badges, and recalculates leaderboards.',
+    description:
+      'Autonomous sync agent decrypts AES-256-GCM tokens, ingests activities, evaluates milestone badges, and recalculates leaderboards.',
     scheduleCron: '0 */6 * * * (Every 6 Hours)',
     isEnabled: true,
     nodes: [
@@ -156,11 +155,12 @@ export const DEFAULT_WORKFLOWS: AgentWorkflowDefinition[] = [
     id: 'wf-auto-problem-solver',
     name: 'Replit-Grade Autonomous Athletic Problem Solver',
     category: 'custom',
-    description: 'Interactive natural language agent that plans, invokes dynamic tools (DB lookup, pace calculators, weather search), verifies solutions, and returns structured athletic programs.',
+    description:
+      'Interactive natural language agent that plans, invokes dynamic tools (DB lookup, pace calculators, weather search), verifies solutions, and returns structured athletic programs.',
     isEnabled: true,
     nodes: [
       { id: 'ps-input', type: 'trigger', label: 'User Goal / Query', service: 'Interactive Playground', status: 'idle' },
-      { id: 'ps-planner', type: 'agent', label: 'Replit Multi-Step Planner', service: 'Gemini 2.5 Flash', status: 'idle' },
+      { id: 'ps-planner', type: 'agent', label: 'Replit Multi-Step Planner', service: 'Gemini 3.6 Flash', status: 'idle' },
       { id: 'ps-tool-exec', type: 'tool', label: 'Dynamic Tool Runner', service: 'Sandbox Executor', status: 'idle' },
       { id: 'ps-verifier', type: 'agent', label: 'Self-Correction Verifier', service: 'Validation Loop', status: 'idle' },
       { id: 'ps-output', type: 'sink', label: 'Structured Solution Sink', service: 'Client Visualizer', status: 'idle' },
@@ -174,10 +174,6 @@ export const DEFAULT_WORKFLOWS: AgentWorkflowDefinition[] = [
   },
 ];
 
-/**
- * REPLIT-STYLE AUTONOMOUS AGENT SOLVER
- * Takes a natural language request, plans sub-tasks, calls tools, verifies with self-correction, and returns a detailed execution trace.
- */
 export async function executeAutonomousAgentSolver(params: {
   userPrompt: string;
   userId?: number;
@@ -185,7 +181,7 @@ export async function executeAutonomousAgentSolver(params: {
 }): Promise<MultiAgentExecutionTrace> {
   const startTime = Date.now();
   const executionId = `exec-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-  
+
   const trace: MultiAgentExecutionTrace = {
     executionId,
     workflowId: 'wf-auto-problem-solver',
@@ -200,9 +196,6 @@ export async function executeAutonomousAgentSolver(params: {
   try {
     const ai = getGenAI();
 
-    // -------------------------------------------------------------
-    // STAGE 1: PLANNER AGENT (Replit Architecture Pattern)
-    // -------------------------------------------------------------
     const plannerPrompt = `You are the Lead Planner Agent in an enterprise-grade Autonomous Multi-Agent Athletic System (similar to Replit Agent / n8n workflow engines).
 A runner or club coach has provided this request:
 "${params.userPrompt}"
@@ -232,7 +225,7 @@ Respond in pure JSON only:
 }`;
 
     const plannerResponse = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: plannerPrompt,
       config: {
         temperature: 0.2,
@@ -244,9 +237,6 @@ Respond in pure JSON only:
     const plannerOutput = JSON.parse(plannerText.replace(/```json/g, '').replace(/```/g, '').trim());
     trace.plannerOutput = plannerOutput;
 
-    // -------------------------------------------------------------
-    // STAGE 2: TOOL EXECUTOR AGENT (Dynamic Tool Calling)
-    // -------------------------------------------------------------
     const subTasks = plannerOutput.subTasks || [];
     let accumulatedState: any = {
       userPrompt: params.userPrompt,
@@ -266,9 +256,15 @@ Respond in pure JSON only:
           const targetPace = params.athleteContext?.targetPace || 5.0;
           const weeklyGoal = params.athleteContext?.weeklyGoal || 30;
           toolOutput = {
-            zone2Pace: `${Math.floor(targetPace + 0.6)}:${Math.round(((targetPace + 0.6) % 1) * 60).toString().padStart(2, '0')} min/km`,
-            tempoPace: `${Math.floor(targetPace)}:${Math.round((targetPace % 1) * 60).toString().padStart(2, '0')} min/km`,
-            vo2IntervalPace: `${Math.floor(targetPace - 0.4)}:${Math.round(((targetPace - 0.4) % 1) * 60).toString().padStart(2, '0')} min/km`,
+            zone2Pace: `${Math.floor(targetPace + 0.6)}:${Math.round(((targetPace + 0.6) % 1) * 60)
+              .toString()
+              .padStart(2, '0')} min/km`,
+            tempoPace: `${Math.floor(targetPace)}:${Math.round((targetPace % 1) * 60)
+              .toString()
+              .padStart(2, '0')} min/km`,
+            vo2IntervalPace: `${Math.floor(targetPace - 0.4)}:${Math.round(((targetPace - 0.4) % 1) * 60)
+              .toString()
+              .padStart(2, '0')} min/km`,
             recommendedWeeklyLoadKm: weeklyGoal,
             longRunTargetKm: Math.round(weeklyGoal * 0.35 * 10) / 10,
           };
@@ -280,7 +276,6 @@ Respond in pure JSON only:
             hydrationTarget: '500ml water with electrolytes per 60 mins of running',
           };
         } else {
-          // Default synthetic tool synthesis
           toolOutput = {
             status: 'completed',
             tool: task.tool,
@@ -310,9 +305,6 @@ Respond in pure JSON only:
       }
     }
 
-    // -------------------------------------------------------------
-    // STAGE 3: SYNTHESIS & CRITIC / VERIFIER AGENT (Self-Correction)
-    // -------------------------------------------------------------
     const verifierPrompt = `You are the Verifier & Synthesis Agent in the autonomous system.
 Review the user's initial goal:
 "${params.userPrompt}"
@@ -341,7 +333,7 @@ Respond in JSON only:
 }`;
 
     const verifierResponse = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: verifierPrompt,
       config: {
         temperature: 0.2,
@@ -369,7 +361,6 @@ Respond in JSON only:
     trace.completedAt = new Date().toISOString();
     trace.durationMs = Date.now() - startTime;
 
-    // Log to system telemetry
     await logAgentAction({
       systemName: 'AUTONOMOUS MULTI-AGENT SOLVER',
       actionType: 'replit_agent_solve',
@@ -382,7 +373,6 @@ Respond in JSON only:
       },
     });
 
-    // Append to global trace stream
     recentExecutionTraces.unshift(trace);
     if (recentExecutionTraces.length > 50) recentExecutionTraces.pop();
 
