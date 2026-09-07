@@ -74,7 +74,7 @@ export async function fetchRunWeather(location: string, date: string): Promise<W
     const query = `Find the local weather conditions, temperature in Celsius and Fahrenheit, humidity, wind speed, precipitation, and brief runner advice for running in "${location}" on "${date}". Format with concise bullet points and a brief 1-line running advice for gear or hydration.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: query,
       config: {
         tools: [{ googleSearch: {} }],
@@ -142,7 +142,7 @@ export async function askAiCoach(
     ];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: formattedContents,
       config: {
         systemInstruction: COACH_SYSTEM_INSTRUCTION,
@@ -169,7 +169,7 @@ export interface MultimodalAnalysisRequest {
 }
 
 /**
- * High-precision Multimodal Image & Video Deep Analysis with Gemini 2.5 Flash Vision
+ * High-precision Multimodal Image & Video Deep Analysis with Gemini Vision
  */
 export async function analyzeMultimodalMedia(params: MultimodalAnalysisRequest): Promise<string> {
   try {
@@ -182,7 +182,9 @@ export async function analyzeMultimodalMedia(params: MultimodalAnalysisRequest):
     }
 
     const mimeType = params.mimeType || 'image/jpeg';
-    const userPrompt = params.userPrompt || 'Please deeply analyze this athletic/running photo or video frame, explain what you observe, evaluate posture, gear, or metrics, and provide clear actionable recommendations in my language.';
+    const userPrompt =
+      params.userPrompt ||
+      'Please deeply analyze this athletic/running photo or video frame, explain what you observe, evaluate posture, gear, or metrics, and provide clear actionable recommendations in my language.';
 
     const systemInstruction = `You are "Pasiya AI," the elite Multimodal Athletic Biomechanics & Sports Science Analyst for Pasiya Max and StrideClub.
 
@@ -197,7 +199,7 @@ Your role:
 - Format with clean Markdown headers, bullet points, and an inspiring sign-off from Pasiya AI!`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: [
         {
           role: 'user',
@@ -225,9 +227,8 @@ Your role:
   } catch (error: any) {
     console.error('Gemini Multimodal Analysis Error:', error);
     if (error.message?.includes('GEMINI_API_KEY')) {
-      return "Multimodal AI Vision requires GEMINI_API_KEY to be configured in your environment secrets. Please configure it to unlock live photo & video analysis!";
+      return 'Multimodal AI Vision requires GEMINI_API_KEY to be configured in your environment secrets. Please configure it to unlock live photo & video analysis!';
     }
     return `Analysis Note: Unable to complete visual processing (${error.message || 'unknown error'}). Please try with a clear JPEG/PNG photo or short clip.`;
   }
-}
- 
+} 
