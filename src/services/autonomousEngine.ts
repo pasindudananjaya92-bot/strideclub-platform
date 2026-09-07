@@ -56,7 +56,6 @@ export async function runAutoAiCoachSystem(): Promise<{ plansGenerated: number; 
 
   for (const user of allUsers) {
     try {
-      // Gather user running history
       const userRuns = await db
         .select()
         .from(runs)
@@ -65,7 +64,10 @@ export async function runAutoAiCoachSystem(): Promise<{ plansGenerated: number; 
         .limit(10);
 
       const totalKm = userRuns.reduce((acc, r) => acc + Number(r.distanceKm), 0);
-      const avgPace = userRuns.length > 0 ? (userRuns.reduce((acc, r) => acc + Number(r.paceMinPerKm), 0) / userRuns.length).toFixed(2) : '5.30';
+      const avgPace =
+        userRuns.length > 0
+          ? (userRuns.reduce((acc, r) => acc + Number(r.paceMinPerKm), 0) / userRuns.length).toFixed(2)
+          : '5.30';
       const weeklyGoalKm = user.weeklyGoalKm || 25;
       const targetPace = user.targetPaceMinPerKm || 5.3;
 
@@ -103,7 +105,7 @@ Respond with pure valid JSON only, without markdown code blocks, with this exact
 }`;
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.6-flash',
           contents: prompt,
           config: {
             temperature: 0.4,
@@ -116,14 +118,11 @@ Respond with pure valid JSON only, without markdown code blocks, with this exact
         planData = JSON.parse(cleaned);
       } catch (aiErr) {
         console.warn('AI fallback for training plan:', aiErr);
-        // Resilient deterministic plan fallback
         planData = createFallbackTrainingPlan(user.displayName || 'Runner', weeklyGoalKm, targetPace, weekLabel);
       }
 
-      // Ensure planData has proper timestamps
       planData.generatedAt = new Date().toISOString();
 
-      // Dispatch in-app notification to user
       await createNotification({
         userId: user.id,
         userUid: user.uid,
@@ -143,7 +142,7 @@ Respond with pure valid JSON only, without markdown code blocks, with this exact
   await logAgentAction({
     systemName: 'AUTO AI COACH (Pasiya Agent)',
     actionType: 'plan_generation',
-    description: `Cloud Scheduler (Monday 6:00 AM Cron): Successfully generated and delivered ${generatedCount} personalized 7-day training plans via Gemini 2.5 Flash.`,
+    description: `Cloud Scheduler (Monday 6:00 AM Cron): Successfully generated and delivered ${generatedCount} personalized 7-day training plans via Gemini 3.6 Flash.`,
     status: 'success',
     metrics: {
       plansGenerated: generatedCount,
@@ -157,9 +156,6 @@ Respond with pure valid JSON only, without markdown code blocks, with this exact
 
 /**
  * SYSTEM 2: AUTO COMMUNITY MODERATOR
- * Runs every 1 hour via Cloud Scheduler free tier
- * Gemini scans all recent community posts. If spam, scams, or bad words detected:
- * auto-deletes post, sends warning notification to author, and writes audit log.
  */
 export async function runAutoCommunityModeratorSystem(): Promise<{ scanned: number; deleted: number }> {
   const isEnabled = await isAutonomousModeEnabled();
@@ -224,7 +220,7 @@ Respond with JSON only, without markdown code blocks:
 }`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: prompt,
       config: {
         temperature: 0.1,
@@ -239,11 +235,9 @@ Respond with JSON only, without markdown code blocks:
       if (item.isViolation) {
         const targetPost = posts.find((p) => p.id === item.id);
         if (targetPost) {
-          // 1. Delete post
           await db.delete(communityPosts).where(eq(communityPosts.id, targetPost.id));
           deletedCount++;
 
-          // 2. Send warning notification to the author
           await createNotification({
             userId: targetPost.userId,
             userUid: targetPost.userUid,
@@ -257,7 +251,6 @@ Respond with JSON only, without markdown code blocks:
             },
           });
 
-          // 3. Log the specific deletion
           await logAgentAction({
             systemName: 'AUTO COMMUNITY MODERATOR',
             actionType: 'post_moderation',
@@ -274,8 +267,15 @@ Respond with JSON only, without markdown code blocks:
     }
   } catch (err: any) {
     console.warn('AI Moderation error, applying heuristic scan:', err);
-    // Fallback heuristic keyword filter for spam
-    const SPAM_KEYWORDS = ['free crypto', 'buy followers', 'telegram money', 'viagra', 'casino bonus', 'whatsapp money', 'whatsapp promo'];
+    const SPAM_KEYWORDS = [
+      'free crypto',
+      'buy followers',
+      'telegram money',
+      'viagra',
+      'casino bonus',
+      'whatsapp money',
+      'whatsapp promo',
+    ];
     for (const post of posts) {
       const text = `${post.title} ${post.content}`.toLowerCase();
       const match = SPAM_KEYWORDS.find((k) => text.includes(k));
@@ -297,7 +297,7 @@ Respond with JSON only, without markdown code blocks:
   await logAgentAction({
     systemName: 'AUTO COMMUNITY MODERATOR',
     actionType: 'post_moderation',
-    description: `Cloud Scheduler (Hourly Cron): Scanned ${posts.length} community posts with Gemini 2.5 Flash. Deleted ${deletedCount} spam posts.`,
+    description: `Cloud Scheduler (Hourly Cron): Scanned ${posts.length} community posts with Gemini 3.6 Flash. Deleted ${deletedCount} spam posts.`,
     status: 'success',
     metrics: {
       scannedPosts: posts.length,
@@ -311,8 +311,6 @@ Respond with JSON only, without markdown code blocks:
 
 /**
  * SYSTEM 3: AUTO EVENTS & REMINDERS
- * Runs automatically. If an Event is scheduled (e.g. "Sunday 7am"),
- * automatically detects pending reminders and sends in-app notifications to all RSVP'd athletes at Saturday 7pm.
  */
 export async function runAutoEventsAndRemindersSystem(): Promise<{ eventsChecked: number; remindersSent: number }> {
   const isEnabled = await isAutonomousModeEnabled();
@@ -331,15 +329,10 @@ export async function runAutoEventsAndRemindersSystem(): Promise<{ eventsChecked
   let remindersSentCount = 0;
 
   for (const event of events) {
-    // Fetch all RSVP'd runners for this event
-    const rsvps = await db
-      .select()
-      .from(eventRsvps)
-      .where(eq(eventRsvps.eventId, event.id));
+    const rsvps = await db.select().from(eventRsvps).where(eq(eventRsvps.eventId, event.id));
 
     if (rsvps.length === 0) continue;
 
-    // If reminder hasn't been sent yet, dispatch to all RSVP'd runners
     if (!event.reminderSent) {
       for (const rsvp of rsvps) {
         await createNotification({
@@ -392,8 +385,6 @@ export async function runAutoEventsAndRemindersSystem(): Promise<{ eventsChecked
 
 /**
  * SYSTEM 4: AUTO DATA SYNC AGENT
- * Runs every 6 hours via Cloud Run Jobs / n8n webhook runner.
- * Automatically fetches user's new runs from Strava or external webhooks and writes to their Logbook.
  */
 export async function runAutoDataSyncSystem(): Promise<{ usersSynced: number; runsAdded: number }> {
   const isEnabled = await isAutonomousModeEnabled();
@@ -432,12 +423,10 @@ export async function runAutoDataSyncSystem(): Promise<{ usersSynced: number; ru
 
   for (const integration of integrations) {
     try {
-      // Find the user
       const userList = await db.select().from(users).where(eq(users.id, integration.userId));
       const user = userList[0];
       if (!user) continue;
 
-      // Simulated realistic Strava sync / n8n webhook ingest
       const randomDistance = Math.round((5 + Math.random() * 8) * 10) / 10;
       const randomPace = Math.round((4.8 + Math.random() * 0.9) * 100) / 100;
       const durationSeconds = Math.round(randomDistance * randomPace * 60);
@@ -451,7 +440,6 @@ export async function runAutoDataSyncSystem(): Promise<{ usersSynced: number; ru
       ];
       const title = `${titles[Math.floor(Math.random() * titles.length)]} [${integration.serviceLabel}]`;
 
-      // Insert run into user's logbook
       const insertedRun = await db
         .insert(runs)
         .values({
@@ -467,18 +455,18 @@ export async function runAutoDataSyncSystem(): Promise<{ usersSynced: number; ru
         })
         .returning();
 
-      // Update lastSyncedAt on the integration
       await db
         .update(userIntegrations)
         .set({ lastSyncedAt: new Date() })
         .where(eq(userIntegrations.id, integration.id));
 
-      // Notify the user
       await createNotification({
         userId: user.id,
         userUid: user.uid,
         title: `🔄 Synced new run from ${integration.serviceLabel}`,
-        message: `Imported "${title}" (${randomDistance} km @ ${Math.floor(randomPace)}:${Math.round((randomPace % 1) * 60).toString().padStart(2, '0')}/km) into your logbook.`,
+        message: `Imported "${title}" (${randomDistance} km @ ${Math.floor(randomPace)}:${Math.round((randomPace % 1) * 60)
+          .toString()
+          .padStart(2, '0')}/km) into your logbook.`,
         type: 'data_sync',
         data: {
           runId: insertedRun[0]?.id,
@@ -511,7 +499,6 @@ export async function runAutoDataSyncSystem(): Promise<{ usersSynced: number; ru
 
 /**
  * SYSTEM 5: CLOUD ORCHESTRATOR / FULL AUTONOMOUS RUNNER
- * Executes all 5 systems in sequence and writes telemetry logs.
  */
 export async function runFullAutonomousCycle(): Promise<any> {
   const coachRes = await runAutoAiCoachSystem();
@@ -549,8 +536,12 @@ function createFallbackTrainingPlan(
 ): TrainingPlanData {
   const dailyKm = Math.round((weeklyGoalKm / 5) * 10) / 10;
   const longRunKm = Math.round(weeklyGoalKm * 0.35 * 10) / 10;
-  const easyPaceStr = `${Math.floor(targetPace + 0.5)}:${Math.round(((targetPace + 0.5) % 1) * 60).toString().padStart(2, '0')} min/km`;
-  const tempoPaceStr = `${Math.floor(targetPace)}:${Math.round((targetPace % 1) * 60).toString().padStart(2, '0')} min/km`;
+  const easyPaceStr = `${Math.floor(targetPace + 0.5)}:${Math.round(((targetPace + 0.5) % 1) * 60)
+    .toString()
+    .padStart(2, '0')} min/km`;
+  const tempoPaceStr = `${Math.floor(targetPace)}:${Math.round((targetPace % 1) * 60)
+    .toString()
+    .padStart(2, '0')} min/km`;
 
   const days: TrainingDayPlan[] = [
     {
@@ -565,7 +556,9 @@ function createFallbackTrainingPlan(
       day: 'Tuesday',
       workoutType: 'Intervals',
       distanceKm: dailyKm,
-      targetPace: `${Math.floor(targetPace - 0.4)}:${Math.round(((targetPace - 0.4) % 1) * 60).toString().padStart(2, '0')} min/km`,
+      targetPace: `${Math.floor(targetPace - 0.4)}:${Math.round(((targetPace - 0.4) % 1) * 60)
+        .toString()
+        .padStart(2, '0')} min/km`,
       focus: 'VO2 Max & Speed Endurance',
       instructions: '1 km warm up, 6x400m repeats at 5K pace with 90s recovery jog, 1 km cool down.',
     },
@@ -616,7 +609,8 @@ function createFallbackTrainingPlan(
     coachSummary: `Welcome to ${weekLabel}! Coach Pasiya has tailored this ${weeklyGoalKm} km block to build aerobic efficiency while maintaining threshold speed. Focus on recovery sleep and hydration.`,
     weeklyTargetKm: weeklyGoalKm,
     keyWorkouts: ['Tuesday 6x400m Speed Repeats', `Sunday ${longRunKm}km Club Long Run`],
-    recoveryTip: 'Drink 500ml electrolyte water within 30 minutes of finishing hard workouts to accelerate glycogen restoration.',
+    recoveryTip:
+      'Drink 500ml electrolyte water within 30 minutes of finishing hard workouts to accelerate glycogen restoration.',
     days,
     generatedAt: new Date().toISOString(),
   };
