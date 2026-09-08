@@ -1,6 +1,6 @@
 import { db } from './index.ts';
 import { agentLogs } from './schema.ts';
-import { desc, sql, gte, eq } from 'drizzle-orm';
+import { desc, sql, eq } from 'drizzle-orm';
 import { AgentTelemetrySummary } from '../types.ts';
 
 export interface CreateAgentLogInput {
@@ -9,6 +9,15 @@ export interface CreateAgentLogInput {
   description: string;
   status?: 'success' | 'warning' | 'error' | 'skipped';
   metrics?: any;
+}
+
+function safeParseMetrics(raw: string | null | undefined): any {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export async function logAgentAction(input: CreateAgentLogInput) {
@@ -33,12 +42,21 @@ export async function logAgentAction(input: CreateAgentLogInput) {
 
 export async function getAgentLogs(limitCount = 60, systemFilter?: string) {
   try {
-    let query = db.select().from(agentLogs);
-    if (systemFilter && systemFilter !== 'all') {
-      query = db.select().from(agentLogs).where(eq(agentLogs.systemName, systemFilter)) as any;
-    }
+    const limit = Math.min(Math.max(Number(limitCount) || 60, 1), 200);
 
-    const rows = await query.orderBy(desc(agentLogs.executedAt)).limit(limitCount);
+    const rows =
+      systemFilter && systemFilter !== 'all'
+        ? await db
+            .select()
+            .from(agentLogs)
+            .where(eq(agentLogs.systemName, systemFilter))
+            .orderBy(desc(agentLogs.executedAt))
+            .limit(limit)
+        : await db
+            .select()
+            .from(agentLogs)
+            .orderBy(desc(agentLogs.executedAt))
+            .limit(limit);
 
     return rows.map((r) => ({
       id: r.id,
@@ -46,7 +64,7 @@ export async function getAgentLogs(limitCount = 60, systemFilter?: string) {
       actionType: r.actionType,
       description: r.description,
       status: (r.status as 'success' | 'warning' | 'error' | 'skipped') || 'success',
-      metrics: r.metrics ? JSON.parse(r.metrics) : null,
+      metrics: safeParseMetrics(r.metrics),
       executedAt: r.executedAt ? r.executedAt.toISOString() : new Date().toISOString(),
     }));
   } catch (error) {
@@ -55,12 +73,18 @@ export async function getAgentLogs(limitCount = 60, systemFilter?: string) {
   }
 }
 
-export async function getAgentTelemetrySummary(autonomousModeEnabled: boolean): Promise<AgentTelemetrySummary> {
+export async function getAgentTelemetrySummary(
+  autonomousModeEnabled: boolean
+): Promise<AgentTelemetrySummary> {
   try {
     const totalCountRes = await db.select({ count: sql<number>`COUNT(*)` }).from(agentLogs);
     const totalCount = Number(totalCountRes[0]?.count || 0);
 
-    const logs = await db.select().from(agentLogs).orderBy(desc(agentLogs.executedAt)).limit(200);
+    const logs = await db
+      .select()
+      .from(agentLogs)
+      .orderBy(desc(agentLogs.executedAt))
+      .limit(200);
 
     let plansGeneratedTotal = 0;
     let postsScannedTotal = 0;
@@ -74,18 +98,14 @@ export async function getAgentTelemetrySummary(autonomousModeEnabled: boolean): 
     }
 
     for (const log of logs) {
-      if (log.metrics) {
-        try {
-          const m = JSON.parse(log.metrics);
-          if (m.plansGenerated) plansGeneratedTotal += Number(m.plansGenerated);
-          if (m.scannedPosts) postsScannedTotal += Number(m.scannedPosts);
-          if (m.deletedSpam) spamPostsDeletedTotal += Number(m.deletedSpam);
-          if (m.rsvpsNotifiedCount) eventRemindersSentTotal += Number(m.rsvpsNotifiedCount);
-          if (m.totalRunsImported) stravaRunsSyncedTotal += Number(m.totalRunsImported);
-        } catch {
-          // ignore parsing error
-        }
-      }
+      const m = safeParseMetrics(log.metrics);
+      if (!m) continue;
+      if (m.plansGenerated) plansGeneratedTotal += Number(m.plansGenerated);
+      if (m.scannedPosts) postsScannedTotal += Number(m.scannedPosts);
+      if (m.deletedSpam) spamPostsDeletedTotal += Number(m.deletedSpam);
+      if (m.rsvpsNotifiedCount) eventRemindersSentTotal += Number(m.rsvpsNotifiedCount);
+      if (m.totalRunsImported) stravaRunsSyncedTotal += Number(m.totalRunsImported);
+      if (m.remindersSent) eventRemindersSentTotal += Number(m.remindersSent);
     }
 
     return {
@@ -111,4 +131,5 @@ export async function getAgentTelemetrySummary(autonomousModeEnabled: boolean): 
       lastRunTimestamp: null,
     };
   }
-} 
+}
+ 
