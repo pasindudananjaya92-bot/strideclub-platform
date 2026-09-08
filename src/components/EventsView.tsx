@@ -29,7 +29,6 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // New event form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -38,10 +37,36 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
   const [distanceKm, setDistanceKm] = useState('10');
   const [paceCategory, setPaceCategory] = useState('All Paces (4:30 - 6:30 min/km)');
 
+  /** YYYY-MM-DD → weekday (no timezone shift) */
+  const weekdayFromYmd = (ymd: string): string | null => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+    const [y, m, d] = ymd.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.toLocaleDateString('en-US', { weekday: 'long' });
+  };
+
+  /** Title has "Sunday" but date is Tuesday → replace day name to match date */
+  const alignTitleWeekday = (rawTitle: string, ymd: string): string => {
+    const correct = weekdayFromYmd(ymd);
+    if (!correct) return rawTitle;
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    let out = rawTitle;
+    for (const day of days) {
+      const re = new RegExp(`\\b${day}\\b`, 'gi');
+      if (re.test(out)) {
+        out = out.replace(re, correct);
+      }
+    }
+    return out;
+  };
+
   const fetchEvents = async () => {
     try {
       setIsLoading(true);
-      const url = currentUser ? `/api/events?userUid=${encodeURIComponent(currentUser.uid)}` : '/api/events';
+      const url = currentUser
+        ? `/api/events?userUid=${encodeURIComponent(currentUser.uid)}`
+        : '/api/events';
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -91,7 +116,6 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
       return;
     }
 
-    // type="date" already YYYY-MM-DD; normalize if user pasted dd/mm/yyyy
     let normalizedDate = eventDate.trim();
     const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(normalizedDate);
     if (dmy) {
@@ -102,6 +126,8 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
       onNotify?.('Date must be YYYY-MM-DD (use the date picker)', 'error');
       return;
     }
+
+    const alignedTitle = alignTitleWeekday(title.trim(), normalizedDate);
 
     try {
       setIsSubmitting(true);
@@ -114,7 +140,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
         method: 'POST',
         headers,
         body: JSON.stringify({
-          title,
+          title: alignedTitle,
           description,
           location,
           eventDate: normalizedDate,
@@ -151,7 +177,6 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
-      {/* Header Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/40 border border-slate-800 p-6 sm:p-8 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -169,7 +194,7 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
               <span>Club Events & Group Runs</span>
             </h1>
             <p className="mt-2 text-sm sm:text-base text-slate-300 max-w-2xl leading-relaxed">
-              Join weekly Sunday 7:00 AM long runs and speed workouts. When you RSVP, Pasiya Agent automatically delivers a weather and gear briefing directly to your dashboard on Saturday at 7:00 PM.
+              Join weekly long runs and speed workouts. When you RSVP, Pasiya Agent can deliver a pre-run reminder to your dashboard.
             </p>
           </div>
 
@@ -184,223 +209,213 @@ export const EventsView: React.FC<EventsViewProps> = ({ currentUser, onNotify })
         </div>
       </div>
 
-      {/* Events Grid */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
             <Clock className="w-5 h-5 text-amber-400" />
             Upcoming Club Runs & Meetups
           </h2>
-          <span className="text-xs text-slate-400">
-            {events.length} Scheduled Sessions
-          </span>
+          <span className="text-xs text-slate-400">{events.length} Scheduled Sessions</span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {events.map((event) => (
-            <div
+            <motion.div
               key={event.id}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-700 transition-all shadow-xl group"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-lg"
             >
-              <div>
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div>
-                    <span className="inline-block text-xs font-mono px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold mb-2">
-                      {new Date(event.eventDate).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        month: 'short',
-                        day: 'numeric',
-                      })}{' '}
-                      • {event.eventTime}
-                    </span>
-                    <h3 className="text-xl font-bold text-slate-100 group-hover:text-amber-400 transition-colors">
-                      {event.title}
-                    </h3>
-                  </div>
-
-                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-800 text-slate-300 shrink-0">
-                    {event.distanceKm} km
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-100">{event.title}</h3>
+                  <p className="mt-1 text-sm text-slate-400 line-clamp-2">{event.description}</p>
+                </div>
+                {event.userHasRsvped && (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> RSVP
                   </span>
+                )}
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-300">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-amber-400" />
+                  {new Date(event.eventDate + 'T12:00:00').toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
                 </div>
-
-                <p className="text-sm text-slate-300 leading-relaxed mb-4">{event.description}</p>
-
-                <div className="space-y-2 text-xs text-slate-400 pt-3 border-t border-slate-800/80">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <MapPin className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>{event.location}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Flame className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>
-                      Pace Bracket: <strong className="text-slate-300">{event.paceCategory}</strong>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Users className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span>
-                      <strong className="text-indigo-300 font-mono">{event.rsvpsCount}</strong> Athletes
-                      Attending
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-400" />
+                  {event.eventTime}
+                </div>
+                <div className="flex items-center gap-2 col-span-2">
+                  <MapPin className="w-4 h-4 text-amber-400" />
+                  {event.location}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-amber-400" />
+                  {event.distanceKm} km
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-amber-400" />
+                  {event.rsvpCount ?? 0} going
                 </div>
               </div>
 
-              {/* Action Bar */}
-              <div className="mt-6 pt-4 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-                  <Bell className="w-3.5 h-3.5" />
-                  <span>Sat 7:00 PM Auto Reminder</span>
-                </div>
-
-                <button
-                  id={`rsvp-btn-${event.id}`}
-                  onClick={() => handleToggleRsvp(event.id)}
-                  className={`inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl text-xs font-bold transition-all ${
-                    event.isRsvpCurrentUser
-                      ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/30'
-                      : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {event.isRsvpCurrentUser ? 'RSVP Confirmed (Tap to Leave)' : 'RSVP for Group Run'}
-                </button>
-              </div>
-            </div>
+              <button
+                onClick={() => handleToggleRsvp(event.id)}
+                className="mt-4 w-full rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-700 transition"
+              >
+                {event.userHasRsvped ? 'Cancel RSVP' : 'RSVP · Get Auto Reminder'}
+              </button>
+            </motion.div>
           ))}
         </div>
+
+        {!isLoading && events.length === 0 && (
+          <p className="text-center text-slate-500 py-10">No club events yet. Host the first group run.</p>
+        )}
       </div>
 
-      {/* Host Event Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+      <AnimatePresence>
+        {isModalOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-amber-400" />
-                Schedule Club Group Run
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 bg-slate-800"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateEvent} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Event Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Sunday Sunrise 10K Long Run & Coffee"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Description & Route Details *</label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Describe the route, hydration stops, paced subgroups, and post-run gathering spot..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Meeting Location & Landmark *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Marina Promenade (Near Main Clubhouse Fountain)"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Event Date (YYYY-MM-DD) *</label>
-                  <input
-                    type="date"
-                    required
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Start Time *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="07:00 AM"
-                    value={eventTime}
-                    onChange={(e) => setEventTime(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Distance (km)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={distanceKm}
-                    onChange={(e) => setDistanceKm(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Pace Category</label>
-                  <input
-                    type="text"
-                    value={paceCategory}
-                    onChange={(e) => setPaceCategory(e.target.value)}
-                    placeholder="All Paces (4:30 - 6:30 min/km)"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs">
-                ⚡ <strong>Autonomous Agent Dispatch:</strong> When scheduled, Pasiya Agent will monitor RSVPs and
-                send Saturday 7:00 PM reminder notifications to all confirmed athletes.
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold"
-                >
-                  {isSubmitting ? 'Scheduling...' : 'Publish Event'}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-amber-400" />
+                  Schedule Club Group Run
+                </h3>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-200">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleCreateEvent} className="space-y-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Event Title *</label>
+                  <input
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Sunday Sunrise 10K Long Run & Coffee"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Description & Route Details *</label>
+                  <textarea
+                    required
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                    placeholder="Describe the route, hydration stops, paced subgroups..."
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Meeting Location & Landmark *</label>
+                  <input
+                    required
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. Marina Promenade (Near Main Clubhouse Fountain)"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Event Date (YYYY-MM-DD) *</label>
+                    <input
+                      type="date"
+                      required
+                      value={eventDate}
+                      onChange={(e) => setEventDate(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+                    />
+                    {eventDate && weekdayFromYmd(eventDate) && (
+                      <p className="mt-1.5 text-xs text-amber-300/90">
+                        Selected weekday:{' '}
+                        <span className="font-bold">{weekdayFromYmd(eventDate)}</span>
+                        {' '}— if title has Mon–Sun, it will match this date
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Start Time *</label>
+                    <input
+                      required
+                      value={eventTime}
+                      onChange={(e) => setEventTime(e.target.value)}
+                      placeholder="07:00 AM"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Distance (km)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={distanceKm}
+                      onChange={(e) => setDistanceKm(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Pace Category</label>
+                    <input
+                      value={paceCategory}
+                      onChange={(e) => setPaceCategory(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+                  Autonomous Agent: when scheduled, reminders can go to RSVP’d athletes before the run.
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-slate-300 hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold disabled:opacity-60"
+                  >
+                    {isSubmitting ? 'Saving…' : 'Publish Event'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
-}; 
+};
+ 
