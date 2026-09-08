@@ -18,8 +18,6 @@ function getGenAI(): GoogleGenAI {
 
 /**
  * SYSTEM 1: AUTO AI COACH - "PASIYA AGENT"
- * Runs every Monday 6:00 AM via Cloud Scheduler (free tier)
- * Automatically generates a personalized 7-day training plan for each user and delivers to their dashboard.
  */
 export async function runAutoAiCoachSystem(): Promise<{ plansGenerated: number; userIds: number[] }> {
   const isEnabled = await isAutonomousModeEnabled();
@@ -64,10 +62,6 @@ export async function runAutoAiCoachSystem(): Promise<{ plansGenerated: number; 
         .limit(10);
 
       const totalKm = userRuns.reduce((acc, r) => acc + Number(r.distanceKm), 0);
-      const avgPace =
-        userRuns.length > 0
-          ? (userRuns.reduce((acc, r) => acc + Number(r.paceMinPerKm), 0) / userRuns.length).toFixed(2)
-          : '5.30';
       const weeklyGoalKm = user.weeklyGoalKm || 25;
       const targetPace = user.targetPaceMinPerKm || 5.3;
 
@@ -385,6 +379,7 @@ export async function runAutoEventsAndRemindersSystem(): Promise<{ eventsChecked
 
 /**
  * SYSTEM 4: AUTO DATA SYNC AGENT
+ * Honest mode: never invents runs. Only reports vault status.
  */
 export async function runAutoDataSyncSystem(): Promise<{ usersSynced: number; runsAdded: number }> {
   const isEnabled = await isAutonomousModeEnabled();
@@ -408,18 +403,16 @@ export async function runAutoDataSyncSystem(): Promise<{ usersSynced: number; ru
     await logAgentAction({
       systemName: 'AUTO DATA SYNC AGENT',
       actionType: 'strava_sync',
-      description: 'Cloud Run Job 6-Hour Sync: Checked vault. No active Strava or webhook integrations connected yet.',
+      description:
+        'Vault check complete. No enabled Strava/webhook integrations found. Nothing to sync (no simulated runs).',
       status: 'success',
-      metrics: { usersSyncedCount: 0, totalRunsImported: 0 },
+      metrics: { usersSyncedCount: 0, totalRunsImported: 0, simulated: false },
     });
     return { usersSynced: 0, runsAdded: 0 };
   }
 
   let usersSyncedCount = 0;
-  let totalRunsImported = 0;
-
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  let skippedNoCredentials = 0;
 
   for (const integration of integrations) {
     try {
@@ -427,74 +420,72 @@ export async function runAutoDataSyncSystem(): Promise<{ usersSynced: number; ru
       const user = userList[0];
       if (!user) continue;
 
-      const randomDistance = Math.round((5 + Math.random() * 8) * 10) / 10;
-      const randomPace = Math.round((4.8 + Math.random() * 0.9) * 100) / 100;
-      const durationSeconds = Math.round(randomDistance * randomPace * 60);
+      const hasEndpoint = Boolean(integration.endpointUrl && String(integration.endpointUrl).trim());
+      const hasKey = Boolean(
+        (integration as any).apiKeyEncrypted || (integration as any).api_key_encrypted
+      );
 
-      const titles = [
-        'Morning Coastal Tempo Run',
-        'Midweek Aerobic Progression',
-        'Interval Track Session (6x800m)',
-        'Sunset Marina Loop',
-        'Easy Base Recovery Run',
-      ];
-      const title = `${titles[Math.floor(Math.random() * titles.length)]} [${integration.serviceLabel}]`;
-
-      const insertedRun = await db
-        .insert(runs)
-        .values({
-          userId: user.id,
-          userUid: user.uid,
-          title,
-          distanceKm: randomDistance,
-          durationSeconds,
-          runDate: todayStr,
-          paceMinPerKm: randomPace,
-          notes: `⚡ Automatically synced by Cloud Run Job via ${integration.serviceLabel} Vault Webhook. Encrypted payload verified.`,
-          surfaceType: 'Road',
-        })
-        .returning();
+      if (!hasEndpoint && !hasKey) {
+        skippedNoCredentials++;
+        await logAgentAction({
+          systemName: 'AUTO DATA SYNC AGENT',
+          actionType: 'strava_sync',
+          description: `Skipped ${integration.serviceLabel} for user #${user.id}: no webhook URL or API credentials in vault.`,
+          status: 'skipped',
+          metrics: {
+            userId: user.id,
+            service: integration.serviceName,
+            simulated: false,
+          },
+        });
+        continue;
+      }
 
       await db
         .update(userIntegrations)
         .set({ lastSyncedAt: new Date() })
         .where(eq(userIntegrations.id, integration.id));
 
-      await createNotification({
-        userId: user.id,
-        userUid: user.uid,
-        title: `🔄 Synced new run from ${integration.serviceLabel}`,
-        message: `Imported "${title}" (${randomDistance} km @ ${Math.floor(randomPace)}:${Math.round((randomPace % 1) * 60)
-          .toString()
-          .padStart(2, '0')}/km) into your logbook.`,
-        type: 'data_sync',
-        data: {
-          runId: insertedRun[0]?.id,
+      await logAgentAction({
+        systemName: 'AUTO DATA SYNC AGENT',
+        actionType: 'strava_sync',
+        description: `Vault OK for ${user.displayName || user.uid} / ${integration.serviceLabel}. Waiting for real webhook payload — zero simulated runs imported.`,
+        status: 'success',
+        metrics: {
+          userId: user.id,
           service: integration.serviceName,
-          distanceKm: randomDistance,
+          simulated: false,
+          runsImported: 0,
         },
       });
 
       usersSyncedCount++;
-      totalRunsImported++;
     } catch (syncErr) {
       console.error(`Error syncing integration ${integration.id}:`, syncErr);
+      await logAgentAction({
+        systemName: 'AUTO DATA SYNC AGENT',
+        actionType: 'strava_sync',
+        description: `Error checking integration #${integration.id}: ${String(syncErr)}`,
+        status: 'error',
+        metrics: { integrationId: integration.id },
+      });
     }
   }
 
   await logAgentAction({
     systemName: 'AUTO DATA SYNC AGENT',
     actionType: 'strava_sync',
-    description: `Cloud Run Job (6-Hour Sync): Automated Strava/n8n synchronization completed. Synced ${usersSyncedCount} accounts, imported ${totalRunsImported} new activities into logbook.`,
+    description: `Honest vault sync finished. Accounts checked: ${usersSyncedCount}. Skipped (no credentials): ${skippedNoCredentials}. Runs imported: 0 (simulation disabled).`,
     status: 'success',
     metrics: {
       usersSyncedCount,
-      totalRunsImported,
-      cloudSchedule: '0 */6 * * *',
+      totalRunsImported: 0,
+      skippedNoCredentials,
+      simulated: false,
     },
   });
 
-  return { usersSynced: usersSyncedCount, runsAdded: totalRunsImported };
+  return { usersSynced: usersSyncedCount, runsAdded: 0 };
 }
 
 /**
