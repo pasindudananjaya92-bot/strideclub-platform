@@ -86,7 +86,7 @@ Respond in pure JSON:
 }`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
+    model: 'gemini-2.0-flash-lite',
     contents: prompt,
     config: {
       temperature: 0.7,
@@ -110,7 +110,6 @@ Respond in pure JSON:
 
 /**
  * Dispatches the drafted post to a Make.com (formerly Integromat) Free Tier Webhook.
- * Make.com receives this JSON payload and automatically posts to Instagram / Facebook / Telegram / YouTube / etc.
  */
 export async function dispatchToMakeWebhook(params: {
   webhookUrl: string;
