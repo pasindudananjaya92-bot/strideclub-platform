@@ -93,7 +93,7 @@ export const DEFAULT_WORKFLOWS: AgentWorkflowDefinition[] = [
     nodes: [
       { id: 'node-cron', type: 'trigger', label: 'Cloud Scheduler Trigger', service: 'Cron / Webhook', status: 'idle' },
       { id: 'node-fetch-db', type: 'tool', label: 'Fetch Athlete Metrics', service: 'Cloud SQL / Supabase', status: 'idle' },
-      { id: 'node-planner', type: 'agent', label: 'Pasiya Planner Agent', service: 'Gemini 3.6 Flash', status: 'idle' },
+      { id: 'node-planner', type: 'agent', label: 'Pasiya Planner Agent', service: 'Gemini 2.0 Flash-Lite', status: 'idle' },
       { id: 'node-weather', type: 'tool', label: 'Grounding Weather Tool', service: 'Google Search API', status: 'idle' },
       { id: 'node-verifier', type: 'agent', label: 'Replit Critic & Verifier', service: 'Physiology Guardrails', status: 'idle' },
       { id: 'node-sink-notify', type: 'sink', label: 'In-App Notification Sink', service: 'PostgreSQL / UI Stream', status: 'idle' },
@@ -160,7 +160,7 @@ export const DEFAULT_WORKFLOWS: AgentWorkflowDefinition[] = [
     isEnabled: true,
     nodes: [
       { id: 'ps-input', type: 'trigger', label: 'User Goal / Query', service: 'Interactive Playground', status: 'idle' },
-      { id: 'ps-planner', type: 'agent', label: 'Replit Multi-Step Planner', service: 'Gemini 3.6 Flash', status: 'idle' },
+      { id: 'ps-planner', type: 'agent', label: 'Replit Multi-Step Planner', service: 'Gemini 2.0 Flash-Lite', status: 'idle' },
       { id: 'ps-tool-exec', type: 'tool', label: 'Dynamic Tool Runner', service: 'Sandbox Executor', status: 'idle' },
       { id: 'ps-verifier', type: 'agent', label: 'Self-Correction Verifier', service: 'Validation Loop', status: 'idle' },
       { id: 'ps-output', type: 'sink', label: 'Structured Solution Sink', service: 'Client Visualizer', status: 'idle' },
@@ -225,7 +225,7 @@ Respond in pure JSON only:
 }`;
 
     const plannerResponse = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.0-flash-lite',
       contents: plannerPrompt,
       config: {
         temperature: 0.2,
@@ -333,7 +333,7 @@ Respond in JSON only:
 }`;
 
     const verifierResponse = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.0-flash-lite',
       contents: verifierPrompt,
       config: {
         temperature: 0.2,
