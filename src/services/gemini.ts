@@ -1,6 +1,9 @@
 import { GoogleGenAI } from '@google/genai';
 import { PASIYA_MAX_SOCIAL_LINKS } from './socialPosterAgent.ts';
 
+/** Free-tier model — high daily quota. Avoid gemini-3.6-flash (often ~20 RPD free). */
+const FREE_MODEL = 'gemini-2.0-flash-lite';
+
 let aiClient: GoogleGenAI | null = null;
 
 function getGenAI(): GoogleGenAI {
@@ -12,6 +15,16 @@ function getGenAI(): GoogleGenAI {
     aiClient = new GoogleGenAI({ apiKey });
   }
   return aiClient;
+}
+
+function isQuotaError(error: any): boolean {
+  const msg = String(error?.message || error || '');
+  return (
+    msg.includes('429') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('quota') ||
+    msg.includes('rate-limit')
+  );
 }
 
 const COACH_SYSTEM_INSTRUCTION = `You are "Pasiya AI," the official all-in-one AI Assistant & Club Coach for the StrideClub Athletic Intelligence Platform and the official representative for Pasiya Max.
@@ -29,14 +42,9 @@ You know everything about the website and can guide visitors on every feature:
 4. **🏆 Leaderboard & Milestone Badges:** Weekly and all-time club rankings, dynamic badges (Bronze 10K, Silver 25K, Gold 50K, Centurion 100K, Velocity Demon).
 5. **📅 Club Group Events & RSVPs:** Organized group runs (e.g. Sunday 7:00 AM Independence Square 10K), real-time 1-click RSVP system.
 6. **💬 Community Discussions:** Social forum for runners with categories (General, Gear & Shoes, Race Prep, Nutrition, Route Sharing) with automated moderation.
-7. **🔐 Integrations Hub (Encrypted Vault):** Connect Strava, Garmin, Apple Health, Webhooks with AES-256-GCM hardware encryption.
-8. **🧠 Multi-Agent Studio & DAG Workflows (Autonomous Cloud Native):**
-   - Autonomous Lead Planner Agent, Dynamic Tool Runner, and Self-Correction Verifier.
-   - 4 Live autonomous pipelines running 24/7 natively on **Vercel Serverless Crons** & **Supabase Free Tier (PostgreSQL)** (100% free tier, zero paid external services).
-   - **GitHub Repository Sync Agent:** Direct access to commit, upload files, and push project updates directly into a GitHub repo with a Personal Access Token.
-   - **Make.com Social Media Auto-Poster:** Generates posts and dispatches via free webhooks to auto-publish photos, videos, and workout milestones to Instagram, Facebook, TikTok, YouTube, and Telegram.
-   - **Sports Science & Biomechanics Lab:** VDOT pace zone calculators, Karvonen HR zones, Pete Riegel race finish time predictors, and running shoe wear trackers.
-9. **📦 1-Click Project Export:** Download the entire source code as a production-ready ZIP file containing all Docker, Vercel, Supabase, and Server files.
+7. **🔐 Integrations Hub (Encrypted Vault):** Connect Strava, Garmin, Apple Health, Webhooks with AES-256-GCM encryption.
+8. **🧠 Multi-Agent Studio:** Autonomous agents for coaching, moderation, event reminders, data vault checks, GitHub sync, and social post drafts — on free-tier hosting (SnapDeploy + Supabase + Gemini).
+9. **📦 1-Click Project Export:** Download the entire source code as a production-ready ZIP.
 
 ### 📲 OFFICIAL PASIYA MAX SOCIAL MEDIA & COMMUNITY CHANNELS:
 Whenever asked for social media, contact info, or community links, promote these channels:
@@ -74,7 +82,7 @@ export async function fetchRunWeather(location: string, date: string): Promise<W
     const query = `Find the local weather conditions, temperature in Celsius and Fahrenheit, humidity, wind speed, precipitation, and brief runner advice for running in "${location}" on "${date}". Format with concise bullet points and a brief 1-line running advice for gear or hydration.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: FREE_MODEL,
       contents: query,
       config: {
         tools: [{ googleSearch: {} }],
@@ -142,7 +150,7 @@ export async function askAiCoach(
     ];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: FREE_MODEL,
       contents: formattedContents,
       config: {
         systemInstruction: COACH_SYSTEM_INSTRUCTION,
@@ -151,31 +159,33 @@ export async function askAiCoach(
       },
     });
 
-    return response.text || 'Keep moving forward! Let me know if you need specific pacing, feature guidance, or training advice.';
+    return (
+      response.text ||
+      'Keep moving forward! Let me know if you need specific pacing, feature guidance, or training advice.'
+    );
   } catch (error: any) {
     console.error('Gemini AI Coach Error:', error);
     if (error.message?.includes('GEMINI_API_KEY')) {
-      return "AI Coach is in offline demo mode. Please ensure GEMINI_API_KEY is configured in your project settings to activate live AI responses!";
+      return 'AI Coach is in offline demo mode. Please ensure GEMINI_API_KEY is configured in your project settings to activate live AI responses!';
     }
-    return `Coach Tip: Consistency beats intensity. Structure your week with 80% easy aerobic miles and 1 quality tempo session. (AI service status: ${error.message || 'temporary timeout'})`;
+    if (isQuotaError(error)) {
+      return 'AI free-tier quota is resting right now. Please wait about 1 minute and try again. Tip: avoid running Full Agent Cycle many times on the same day.';
+    }
+    return 'Coach Tip: Consistency beats intensity. Structure your week with 80% easy aerobic miles and 1 quality tempo session.';
   }
 }
 
 export interface MultimodalAnalysisRequest {
-  mediaBase64: string; // clean base64 or data URL
+  mediaBase64: string;
   mimeType: string;
   userPrompt?: string;
   analysisType?: 'running_form' | 'shoe_wear' | 'gps_watch' | 'injury_rehab' | 'nutrition' | 'general';
 }
 
-/**
- * High-precision Multimodal Image & Video Deep Analysis with Gemini Vision
- */
 export async function analyzeMultimodalMedia(params: MultimodalAnalysisRequest): Promise<string> {
   try {
     const ai = getGenAI();
 
-    // Strip header if data URL was provided
     let rawBase64 = params.mediaBase64;
     if (rawBase64.includes('base64,')) {
       rawBase64 = rawBase64.split('base64,')[1];
@@ -199,7 +209,7 @@ Your role:
 - Format with clean Markdown headers, bullet points, and an inspiring sign-off from Pasiya AI!`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: FREE_MODEL,
       contents: [
         {
           role: 'user',
@@ -229,6 +239,9 @@ Your role:
     if (error.message?.includes('GEMINI_API_KEY')) {
       return 'Multimodal AI Vision requires GEMINI_API_KEY to be configured in your environment secrets. Please configure it to unlock live photo & video analysis!';
     }
-    return `Analysis Note: Unable to complete visual processing (${error.message || 'unknown error'}). Please try with a clear JPEG/PNG photo or short clip.`;
+    if (isQuotaError(error)) {
+      return 'Vision AI free-tier quota is resting. Please wait about 1 minute and try again with a clear photo.';
+    }
+    return 'Analysis Note: Unable to complete visual processing right now. Please try with a clear JPEG/PNG photo or short clip.';
   }
 } 
