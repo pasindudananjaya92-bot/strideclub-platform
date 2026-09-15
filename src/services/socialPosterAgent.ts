@@ -13,7 +13,7 @@ export const PASIYA_MAX_SOCIAL_LINKS = {
   instagram: 'https://www.instagram.com/pasindu5598',
   facebook: 'https://www.facebook.com/share/18xRGhYVUo/',
   blog: 'https://mamageblog.blogspot.com',
-  youtube: 'https://youtube.com/@pasya',
+  youtube: 'https://youtube.com/@pasyamaxofficial',
   whatsappChannel: 'https://whatsapp.com/channel/0029VaPASIAMAX',
   whatsappGroup: 'https://chat.whatsapp.com/KjhsWakBQoUI4SEEvZXAsO',
   imo: 'https://s.imoim.net/KNdKwX?ISCI=001102',
