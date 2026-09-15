@@ -29,7 +29,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenLogModal }) => {
-  const { user, signIn, signOut, loading } = useAuth();
+  const { user, signIn, signOut, loading, isAdmin } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -65,7 +65,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20">
-          {/* Logo & Brand */}
           <div className="flex items-center space-x-3">
             <button
               id="brand-logo-btn"
@@ -91,7 +90,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
             <p className="text-[11px] text-slate-400 hidden sm:block">Free-Tier · Autonomous On-Demand</p>
           </div>
 
-          {/* Desktop Navigation */}
           <nav
             id="header-nav-tabs"
             className="hidden xl:flex items-center space-x-1 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 shadow-inner"
@@ -129,7 +127,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
             })}
           </nav>
 
-          {/* Right controls */}
           <div className="flex items-center space-x-2.5">
             <button
               id="btn-github-export"
@@ -176,6 +173,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
                     </div>
                   )}
                 </button>
+                {isAdmin && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    Admin
+                  </span>
+                )}
                 <button
                   id="btn-sign-out"
                   type="button"
@@ -211,7 +213,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
           </div>
         </div>
 
-        {/* Medium screen sub-nav */}
         <div className="hidden md:flex xl:hidden items-center space-x-1 py-2 border-t border-slate-800/80 overflow-x-auto scrollbar-none">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -234,7 +235,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, onOpenL
           })}
         </div>
 
-        {/* Mobile menu */}
         {mobileMenuOpen && (
           <div className="xl:hidden py-4 border-t border-slate-800 space-y-2">
             <div className="grid grid-cols-2 gap-2">
