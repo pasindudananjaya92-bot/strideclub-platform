@@ -86,7 +86,11 @@ async function startServer() {
   app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res) => {
     try {
       const user = await getUserByUid(req.user!.uid);
-      res.json({ user });
+      res.json({
+        user,
+        isAdmin: Boolean(req.isAdmin),
+        email: req.dbUser?.email || req.user?.email || null,
+      });
     } catch (error: any) {
       console.error('Error in /api/auth/me:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch user' });
@@ -727,4 +731,5 @@ async function startServer() {
   });
 }
 
-startServer(); 
+startServer();
+ 
