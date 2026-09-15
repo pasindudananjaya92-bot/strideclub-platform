@@ -99,7 +99,7 @@ Respond with pure valid JSON only, without markdown code blocks, with this exact
 }`;
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash-lite',
+          model: 'gemini-2.0-flash',
           contents: prompt,
           config: {
             temperature: 0.4,
@@ -136,7 +136,7 @@ Respond with pure valid JSON only, without markdown code blocks, with this exact
   await logAgentAction({
     systemName: 'AUTO AI COACH (Pasiya Agent)',
     actionType: 'plan_generation',
-    description: `Successfully generated and delivered ${generatedCount} personalized 7-day training plans via Gemini 2.0 Flash-Lite (free tier).`,
+    description: `Successfully generated and delivered ${generatedCount} personalized 7-day training plans via Gemini 2.0 Flash (free tier).`,
     status: 'success',
     metrics: {
       plansGenerated: generatedCount,
@@ -214,7 +214,7 @@ Respond with JSON only, without markdown code blocks:
 }`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-lite',
+      model: 'gemini-2.0-flash',
       contents: prompt,
       config: {
         temperature: 0.1,
@@ -291,7 +291,7 @@ Respond with JSON only, without markdown code blocks:
   await logAgentAction({
     systemName: 'AUTO COMMUNITY MODERATOR',
     actionType: 'post_moderation',
-    description: `Scanned ${posts.length} community posts with Gemini 2.0 Flash-Lite. Deleted ${deletedCount} spam posts.`,
+    description: `Scanned ${posts.length} community posts with Gemini 2.0 Flash. Deleted ${deletedCount} spam posts.`,
     status: 'success',
     metrics: {
       scannedPosts: posts.length,
