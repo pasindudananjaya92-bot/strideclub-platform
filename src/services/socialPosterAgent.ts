@@ -34,9 +34,6 @@ export interface SocialPostDraft {
   language: 'sinhala' | 'english' | 'bilingual';
 }
 
-/**
- * Uses Gemini to generate high-engagement social media content for Pasiya Max's athletic & tech channels
- */
 export async function generateSocialPost(params: {
   topic: string;
   platform?: 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'telegram' | 'whatsapp' | 'x';
@@ -86,7 +83,7 @@ Respond in pure JSON:
 }`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash-lite',
+    model: 'gemini-2.0-flash',
     contents: prompt,
     config: {
       temperature: 0.7,
@@ -108,9 +105,6 @@ Respond in pure JSON:
   };
 }
 
-/**
- * Dispatches the drafted post to a Make.com (formerly Integromat) Free Tier Webhook.
- */
 export async function dispatchToMakeWebhook(params: {
   webhookUrl: string;
   post: SocialPostDraft;
