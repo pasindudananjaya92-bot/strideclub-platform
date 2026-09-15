@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { adminAuth } from '../lib/firebase-admin.ts';
 import { DecodedIdToken } from 'firebase-admin/auth';
 import { getOrCreateUser } from '../db/users.ts';
+import { isAdminEmail } from '../lib/admin.ts';
 
 export interface AuthRequest extends Request {
   user?: DecodedIdToken;
@@ -12,6 +13,7 @@ export interface AuthRequest extends Request {
     displayName: string | null;
     photoUrl: string | null;
   };
+  isAdmin?: boolean;
 }
 
 export const requireAuth = async (
@@ -36,6 +38,7 @@ export const requireAuth = async (
       decodedToken.picture || null
     );
     req.dbUser = dbUser;
+    req.isAdmin = isAdminEmail(dbUser.email || decodedToken.email);
 
     next();
   } catch (error) {
@@ -45,9 +48,7 @@ export const requireAuth = async (
 };
 
 /**
- * Token තියෙනවා නම් real user.
- * නැති නම් Supabase එකේ uid=demo-user row එක resolve / create කරලා ඒ id එක use කරනවා.
- * Numeric id hardcode කරන්නේ නැහැ (id 1 vs 6 ගැටලුව නැති වෙනවා).
+ * Optional auth: real user if token valid, else demo-user.
  */
 export const optionalAuthOrDemo = async (
   req: AuthRequest,
@@ -70,6 +71,7 @@ export const optionalAuthOrDemo = async (
       displayName: demo.displayName ?? 'Pasiya Max ⚡',
       photoUrl: demo.photoUrl ?? null,
     };
+    req.isAdmin = false;
   };
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -96,6 +98,7 @@ export const optionalAuthOrDemo = async (
       decodedToken.picture || null
     );
     req.dbUser = dbUser;
+    req.isAdmin = isAdminEmail(dbUser.email || decodedToken.email);
     return next();
   } catch (error) {
     console.warn('Token invalid — falling back to demo user by uid');
@@ -107,4 +110,17 @@ export const optionalAuthOrDemo = async (
       return res.status(401).json({ error: 'Unauthorized: Invalid authentication session' });
     }
   }
-}; 
+};
+
+/** Block non-admins (use after requireAuth). */
+export const requireAdmin = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  if (!req.isAdmin) {
+    return res.status(403).json({ error: 'Forbidden: Admin access required' });
+  }
+  next();
+};
+ 
