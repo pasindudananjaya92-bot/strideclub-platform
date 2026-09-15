@@ -8,6 +8,7 @@ interface AuthContextType {
   dbProfile: UserProfile | null;
   token: string | null;
   loading: boolean;
+  isAdmin: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshToken: () => Promise<string | null>;
@@ -22,6 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [dbProfile, setDbProfile] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     if (!auth.currentUser) return {};
@@ -40,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserProfile = useCallback(async () => {
     if (!auth.currentUser) {
       setDbProfile(null);
+      setIsAdmin(false);
       return;
     }
 
@@ -55,9 +58,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.ok) {
         const data = await res.json();
         setDbProfile(data.user);
+        setIsAdmin(Boolean(data.isAdmin));
+      } else {
+        setIsAdmin(false);
       }
     } catch (err) {
       console.error('Failed to sync user profile:', err);
+      setIsAdmin(false);
     }
   }, []);
 
@@ -83,13 +90,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (res.ok) {
             const data = await res.json();
             setDbProfile(data.user);
+            setIsAdmin(Boolean(data.isAdmin));
+          } else {
+            setIsAdmin(false);
           }
         } catch (e) {
           console.error('Error during initial auth profile fetch:', e);
+          setIsAdmin(false);
         }
       } else {
         setToken(null);
         setDbProfile(null);
+        setIsAdmin(false);
       }
       setLoading(false);
     });
@@ -117,6 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setToken(null);
       setDbProfile(null);
+      setIsAdmin(false);
     } catch (error) {
       console.error('Error signing out:', error);
     } finally {
@@ -131,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dbProfile,
         token,
         loading,
+        isAdmin,
         signIn,
         signOut,
         refreshToken,
