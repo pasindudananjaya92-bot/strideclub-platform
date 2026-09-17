@@ -1,0 +1,77 @@
+name: StrideClub Sentinel Cron
+
+on:
+  schedule:
+    # Every 6 hours — health only (no Gemini quota)
+    - cron: '0 */6 * * *'
+    # Daily 06:00 UTC — full agent cycle
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      run_full_cycle:
+        description: 'Also run full 5-agent cycle (uses Gemini quota)'
+        type: boolean
+        default: false
+
+jobs:
+  sentinel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Resolve app URL
+        id: url
+        run: |
+          APP_URL="${{ secrets.APP_URL }}"
+          if [ -z "$APP_URL" ]; then
+            APP_URL="https://strideclub-platform-6b71a.containers.snapdeploy.app"
+          fi
+          APP_URL="${APP_URL%/}"
+          echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Health check (wake + diagnose)
+        id: health
+        run: |
+          set +e
+          CODE=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
+            --max-time 90 \
+            "${{ steps.url.outputs.app_url }}/api/health?log=1")
+          echo "http=$CODE"
+          cat /tmp/health.json || true
+          echo "http_code=$CODE" >> "$GITHUB_OUTPUT"
+          if [ "$CODE" != "200" ]; then
+            echo "Health not OK (HTTP $CODE). SnapDeploy may be sleeping or undeployed Sentinel."
+            exit 1
+          fi
+
+      - name: Decide full cycle
+        id: cycle
+        run: |
+          RUN=false
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # Daily 06:00 UTC job only (github.event.schedule is the cron string)
+            if [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then
+              RUN=true
+            fi
+          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.run_full_cycle }}" = "true" ]; then
+            RUN=true
+          fi
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+      - name: Full autonomous cycle
+        if: steps.cycle.outputs.run == 'true'
+        run: |
+          set +e
+          CODE=$(curl -sS -o /tmp/cycle.json -w "%{http_code}" \
+            --max-time 120 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "${{ steps.url.outputs.app_url }}/api/agent/trigger/full-cycle")
+          echo "http=$CODE"
+          cat /tmp/cycle.json || true
+          if [ "$CODE" != "200" ]; then
+            echo "Full cycle failed (HTTP $CODE)"
+            exit 1
+          fi
+ 
