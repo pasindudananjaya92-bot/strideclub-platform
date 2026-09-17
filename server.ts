@@ -58,6 +58,7 @@ import {
   generateSocialPost,
   dispatchToMakeWebhook,
 } from './src/services/socialPosterAgent.ts';
+import { runSentinelHealth } from './src/services/sentinelHealth.ts';
 
 dotenv.config();
 
@@ -70,8 +71,20 @@ async function startServer() {
 
   seedDefaultEventsIfEmpty().catch((err) => console.error('Error in seedDefaultEventsIfEmpty:', err));
 
-  app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', time: new Date().toISOString() });
+  app.get('/api/health', async (req, res) => {
+    try {
+      const writeLog = String(req.query.log || '') === '1';
+      const health = await runSentinelHealth(writeLog);
+      const http = health.status === 'error' ? 503 : 200;
+      res.status(http).json(health);
+    } catch (error: any) {
+      res.status(500).json({
+        ok: false,
+        status: 'error',
+        time: new Date().toISOString(),
+        issues: [error.message || 'Health check crashed'],
+      });
+    }
   });
 
   app.get('/api/export/project-zip', (req, res) => {
@@ -731,5 +744,4 @@ async function startServer() {
   });
 }
 
-startServer();
- 
+startServer(); 
