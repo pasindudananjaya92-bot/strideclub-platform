@@ -59,6 +59,7 @@ import {
   dispatchToMakeWebhook,
 } from './src/services/socialPosterAgent.ts';
 import { runSentinelHealth } from './src/services/sentinelHealth.ts';
+import { startSentinelScheduler } from './src/services/sentinelScheduler.ts';
 
 dotenv.config();
 
@@ -741,7 +742,9 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Running Club Platform server listening on http://0.0.0.0:${PORT}`);
+    startSentinelScheduler();
   });
 }
 
-startServer(); 
+startServer();
+ 
