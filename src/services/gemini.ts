@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { PASIYA_MAX_SOCIAL_LINKS } from './socialPosterAgent.ts';
+import { isAdminEmail } from '../lib/admin.ts';
 
 /**
  * 2.0-flash was shut down (2026-06-01).
@@ -56,6 +57,31 @@ type ChatTurn = {
   content?: string;
 };
 
+function isFounderContext(ctx?: Record<string, unknown>): boolean {
+  if (!ctx) return false;
+  if (ctx.isAdmin === true || ctx.isFounder === true || ctx.role === 'founder_admin') {
+    return true;
+  }
+  return isAdminEmail(String(ctx.email || ''));
+}
+
+function identityInstruction(ctx?: Record<string, unknown>): string {
+  if (isFounderContext(ctx)) {
+    const name = String(ctx?.displayName || ctx?.name || 'Pasindu Dananjaya');
+    const email = String(ctx?.email || 'Pasindudananjaya92@gmail.com');
+    return `
+FOUNDER MODE — mandatory:
+The person chatting is ${name} <${email}>.
+He is Pasiya Max: founder, owner, and administrator of this StrideClub platform.
+Address him as the creator (Sinhala: නිර්මාතෘ / හිමිකරු). Never treat him as a random athlete.
+On the first reply, greet him by that role, then answer the question.
+Do not ask him to sign in. Do not say you cannot verify identity.`;
+  }
+
+  const guest = String(ctx?.displayName || 'club athlete');
+  return `The user is a club athlete (${guest}). Be helpful. Do not call them the founder.`;
+}
+
 function toGeminiContents(history: ChatTurn[] = [], prompt: string): any[] {
   const items: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
 
@@ -97,7 +123,9 @@ async function generateWithRetry(
       ? [{ role: 'user', parts: [{ text: contents }] }]
       : contents;
 
-  const models = resolvedModel ? [resolvedModel, ...MODEL_CANDIDATES.filter((m) => m !== resolvedModel)] : [...MODEL_CANDIDATES];
+  const models = resolvedModel
+    ? [resolvedModel, ...MODEL_CANDIDATES.filter((m) => m !== resolvedModel)]
+    : [...MODEL_CANDIDATES];
 
   let lastError: any;
 
@@ -140,13 +168,14 @@ export async function askAiCoach(
 
     let finalPrompt = String(prompt || '').trim();
     if (userContext && Object.keys(userContext).length) {
-      finalPrompt += `\n\nAthlete context (JSON): ${JSON.stringify(userContext)}`;
+      finalPrompt += `\n\nSession identity (JSON): ${JSON.stringify(userContext)}`;
     }
 
     const systemInstruction = `You are Pasiya AI, the official endurance running coach of StrideClub and assistant of Pasiya Max.
 Be practical, motivating, and science-based (80/20 easy miles, polarized training).
 Answer in the user's language (Sinhala or English). Keep answers clear and actionable.
 Never reply with a generic canned "Coach Tip" sentence. Always answer the actual question.
+${identityInstruction(userContext)}
 Official links when relevant:
 - YouTube: ${PASIYA_MAX_SOCIAL_LINKS.youtube}
 - Instagram: ${PASIYA_MAX_SOCIAL_LINKS.instagram}
@@ -175,6 +204,7 @@ export async function analyzeMultimodalMedia(params: {
   mediaBase64?: string;
   mimeType?: string;
   analysisType?: string;
+  userContext?: Record<string, unknown>;
 }): Promise<string> {
   try {
     if (!process.env.GEMINI_API_KEY) {
@@ -203,8 +233,8 @@ export async function analyzeMultimodalMedia(params: {
     }
 
     const text = await generateWithRetry([{ role: 'user', parts }], {
-      systemInstruction:
-        'You are Pasiya AI Vision for runners. Analyze running form, shoes, watch screens, and training notes. Be specific and practical. Reply in the user language.',
+      systemInstruction: `You are Pasiya AI Vision for runners. Analyze running form, shoes, watch screens, and training notes. Be specific and practical. Reply in the user language.
+${identityInstruction(params.userContext)}`,
       temperature: 0.4,
     });
 
