@@ -1,10 +1,19 @@
 import { GoogleGenAI } from '@google/genai';
 import { PASIYA_MAX_SOCIAL_LINKS } from './socialPosterAgent.ts';
 
-/** Free-tier model — good daily quota & widely available on free keys. */
-const FREE_MODEL = 'gemini-2.0-flash';
+/**
+ * 2.0-flash was shut down (2026-06-01).
+ * Try lite first (better free-tier quota), then Google's replacement.
+ */
+const MODEL_CANDIDATES = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-3.6-flash',
+  'gemini-2.5-flash-lite',
+];
 
 let aiClient: GoogleGenAI | null = null;
+let resolvedModel: string | null = null;
 
 function getGenAI(): GoogleGenAI {
   if (!aiClient) {
@@ -24,6 +33,16 @@ function isQuotaError(error: any): boolean {
     msg.includes('resource_exhausted') ||
     msg.includes('quota') ||
     msg.includes('rate limit')
+  );
+}
+
+function isModelMissingError(error: any): boolean {
+  const msg = String(error?.message || error || '').toLowerCase();
+  return (
+    msg.includes('404') ||
+    msg.includes('not found') ||
+    msg.includes('no longer available') ||
+    msg.includes('not supported')
   );
 }
 
@@ -78,24 +97,34 @@ async function generateWithRetry(
       ? [{ role: 'user', parts: [{ text: contents }] }]
       : contents;
 
+  const models = resolvedModel ? [resolvedModel, ...MODEL_CANDIDATES.filter((m) => m !== resolvedModel)] : [...MODEL_CANDIDATES];
+
   let lastError: any;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const response = await ai.models.generateContent({
-        model: FREE_MODEL,
-        contents: normalized,
-        config,
-      });
-      return (response.text || '').trim();
-    } catch (err: any) {
-      lastError = err;
-      if (isQuotaError(err) && attempt < retries) {
-        await new Promise((r) => setTimeout(r, 45000));
-        continue;
+
+  for (const model of models) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: normalized,
+          config,
+        });
+        resolvedModel = model;
+        return (response.text || '').trim();
+      } catch (err: any) {
+        lastError = err;
+        if (isModelMissingError(err)) {
+          break;
+        }
+        if (isQuotaError(err) && attempt < retries) {
+          await new Promise((r) => setTimeout(r, 45000));
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
   }
+
   throw lastError;
 }
 
