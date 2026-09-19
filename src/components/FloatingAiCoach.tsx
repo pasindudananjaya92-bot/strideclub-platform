@@ -32,7 +32,7 @@ interface ExtendedChatMessage extends ChatMessage {
 const SOCIAL_LINKS = [
   { name: 'Instagram', url: 'https://www.instagram.com/pasindu5598', icon: '📸', color: 'from-pink-500 to-purple-600' },
   { name: 'Facebook', url: 'https://www.facebook.com/share/18xRGhYVUo/', icon: '📘', color: 'from-blue-600 to-blue-800' },
-  { name: 'YouTube', url: 'https://youtube.com/@pasya', icon: '▶️', color: 'from-red-600 to-red-700' },
+  { name: 'YouTube', url: 'https://youtube.com/@pasyamaxofficial', icon: '▶️', color: 'from-red-600 to-red-700' },
   { name: 'WhatsApp Channel', url: 'https://whatsapp.com/channel/0029VaPASIAMAX', icon: '💬', color: 'from-emerald-500 to-green-600' },
   { name: 'WhatsApp Group', url: 'https://chat.whatsapp.com/KjhsWakBQoUI4SEEvZXAsO', icon: '👥', color: 'from-emerald-600 to-teal-700' },
   { name: 'Telegram Channel', url: 'https://t.me/goldenbotmdchannel', icon: '📢', color: 'from-sky-500 to-blue-600' },
@@ -45,7 +45,7 @@ const SOCIAL_LINKS = [
 ];
 
 export const FloatingAiCoach: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAdmin, dbProfile } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'social' | 'guide'>('chat');
   const [messages, setMessages] = useState<ExtendedChatMessage[]>([
@@ -57,8 +57,7 @@ export const FloatingAiCoach: React.FC = () => {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  // Media upload state
+
   const [selectedMedia, setSelectedMedia] = useState<{
     file: File;
     previewUrl: string;
@@ -73,6 +72,14 @@ export const FloatingAiCoach: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const sessionIdentity = {
+    displayName: user?.displayName || dbProfile?.displayName || null,
+    email: user?.email || null,
+    isAdmin,
+    isFounder: isAdmin,
+    role: isAdmin ? 'founder_admin' : 'athlete',
+  };
 
   const quickChips = [
     { label: '📸 ඡායාරූපයක් / වීඩියෝවක් පරික්ෂා කරන්න', prompt: 'මගේ ධාවන ඉරියව් හෝ පාවහන් වල ඡායාරූපයක් පරික්ෂා කර ගැඹුරු උපදෙස් දෙන්න.' },
@@ -97,7 +104,6 @@ export const FloatingAiCoach: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size (< 25MB)
     if (file.size > 25 * 1024 * 1024) {
       alert('File size exceeds 25MB limit. Please upload a smaller photo or short video clip.');
       return;
@@ -120,7 +126,6 @@ export const FloatingAiCoach: React.FC = () => {
     };
 
     reader.readAsDataURL(file);
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -138,7 +143,13 @@ export const FloatingAiCoach: React.FC = () => {
     if ((!query && !selectedMedia) || loading) return;
 
     const currentMedia = selectedMedia;
-    const userPrompt = query || (currentMedia ? (currentMedia.mediaType === 'video' ? 'Please analyze this video clip of my athletic activity and provide deep biomechanical coaching.' : 'Please analyze this photo in detail, inspect form/wear/metrics, and provide actionable tips in my language.') : '');
+    const userPrompt =
+      query ||
+      (currentMedia
+        ? currentMedia.mediaType === 'video'
+          ? 'Please analyze this video clip of my athletic activity and provide deep biomechanical coaching.'
+          : 'Please analyze this photo in detail, inspect form/wear/metrics, and provide actionable tips in my language.'
+        : '');
 
     const userMessage: ExtendedChatMessage = {
       role: 'user',
@@ -157,7 +168,6 @@ export const FloatingAiCoach: React.FC = () => {
 
     try {
       if (currentMedia) {
-        // MULTIMODAL API CALL
         const res = await fetch('/api/ai/multimodal-analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -166,6 +176,7 @@ export const FloatingAiCoach: React.FC = () => {
             mimeType: currentMedia.mimeType,
             userPrompt,
             analysisType,
+            userContext: sessionIdentity,
           }),
         });
 
@@ -176,14 +187,13 @@ export const FloatingAiCoach: React.FC = () => {
           throw new Error(data.error || 'Failed to complete media analysis');
         }
       } else {
-        // STANDARD TEXT CHATBOT CALL
         const res = await fetch('/api/ai/coach', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             prompt: query,
             history: messages.map((m) => ({ role: m.role, content: m.content })).slice(-10),
-            userContext: user ? { totalKm: 25, avgPace: '5:15/km' } : undefined,
+            userContext: sessionIdentity,
           }),
         });
 
@@ -220,7 +230,6 @@ export const FloatingAiCoach: React.FC = () => {
 
   return (
     <div id="floating-ai-coach-wrapper" className="fixed bottom-5 right-5 z-50">
-      {/* Floating Closed Trigger Bubble */}
       {!isOpen && (
         <button
           id="btn-open-floating-ai-coach"
@@ -240,13 +249,11 @@ export const FloatingAiCoach: React.FC = () => {
         </button>
       )}
 
-      {/* Floating Opened Chat Popover Window */}
       {isOpen && (
         <div
           id="floating-ai-coach-popover"
           className="w-[94vw] sm:w-[460px] h-[600px] max-h-[88vh] bg-slate-950 text-white rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         >
-          {/* Header */}
           <div className="bg-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center space-x-2.5">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-slate-950 font-bold shadow-md">
@@ -281,7 +288,6 @@ export const FloatingAiCoach: React.FC = () => {
             </div>
           </div>
 
-          {/* Sub-Navigation Tabs */}
           <div className="bg-slate-900/80 px-3 py-1.5 border-b border-slate-800 flex items-center space-x-1 text-xs">
             <button
               onClick={() => setActiveTab('chat')}
@@ -318,7 +324,6 @@ export const FloatingAiCoach: React.FC = () => {
             </button>
           </div>
 
-          {/* TAB 1: Chat Area */}
           {activeTab === 'chat' && (
             <div className="flex-1 p-4 overflow-y-auto space-y-3 scrollbar-thin text-xs">
               {messages.map((msg, idx) => (
@@ -326,7 +331,6 @@ export const FloatingAiCoach: React.FC = () => {
                   key={idx}
                   className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                  {/* If user uploaded media in this message */}
                   {msg.mediaUrl && (
                     <div className="mb-1.5 max-w-[80%] rounded-2xl overflow-hidden border border-emerald-500/40 shadow-lg">
                       {msg.mediaType === 'video' ? (
@@ -379,7 +383,6 @@ export const FloatingAiCoach: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 2: Pasiya Max Social Media Hub */}
           {activeTab === 'social' && (
             <div className="flex-1 p-4 overflow-y-auto space-y-2 scrollbar-thin">
               <div className="text-center mb-3">
@@ -409,7 +412,6 @@ export const FloatingAiCoach: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 3: Site Features Guide */}
           {activeTab === 'guide' && (
             <div className="flex-1 p-4 overflow-y-auto space-y-2 scrollbar-thin text-xs">
               <div className="text-center mb-2">
@@ -439,7 +441,6 @@ export const FloatingAiCoach: React.FC = () => {
             </div>
           )}
 
-          {/* Quick Suggestion Chips (Shown on Chat tab) */}
           {activeTab === 'chat' && !selectedMedia && (
             <div className="px-3 py-1.5 bg-slate-950/90 border-t border-slate-900 flex overflow-x-auto space-x-1.5 scrollbar-none">
               {quickChips.map((chip, i) => (
@@ -454,7 +455,6 @@ export const FloatingAiCoach: React.FC = () => {
             </div>
           )}
 
-          {/* STAGED MEDIA PREVIEW CARD */}
           {selectedMedia && (
             <div className="px-3 py-2 bg-emerald-950/40 border-t border-emerald-800/60 flex items-center justify-between">
               <div className="flex items-center space-x-2.5 overflow-hidden">
@@ -502,7 +502,6 @@ export const FloatingAiCoach: React.FC = () => {
             </div>
           )}
 
-          {/* Hidden File Picker Input */}
           <input
             type="file"
             ref={fileInputRef}
@@ -511,7 +510,6 @@ export const FloatingAiCoach: React.FC = () => {
             className="hidden"
           />
 
-          {/* Input Bar */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -519,7 +517,6 @@ export const FloatingAiCoach: React.FC = () => {
             }}
             className="p-3 bg-slate-900 border-t border-slate-800 flex items-center space-x-2"
           >
-            {/* Attachment Button for Photo/Video */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -552,5 +549,4 @@ export const FloatingAiCoach: React.FC = () => {
       )}
     </div>
   );
-};
- 
+}; 
