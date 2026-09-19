@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 export const AiCoachView: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAdmin, dbProfile } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<'chat' | 'calculator' | 'zones'>('chat');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -29,8 +29,7 @@ export const AiCoachView: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Pace calculator states
-  const [calcDistance, setCalcDistance] = useState('5'); // km
+  const [calcDistance, setCalcDistance] = useState('5');
   const [calcHours, setCalcHours] = useState('0');
   const [calcMinutes, setCalcMinutes] = useState('25');
   const [calcSeconds, setCalcSeconds] = useState('00');
@@ -41,10 +40,19 @@ export const AiCoachView: React.FC = () => {
     (parseInt(calcMinutes) || 0) * 60 +
     (parseInt(calcSeconds) || 0);
 
-  const paceMinPerKm = totalSecs > 0 && distNum > 0 ? (totalSecs / 60) / distNum : 5.0;
+  const paceMinPerKm = totalSecs > 0 && distNum > 0 ? totalSecs / 60 / distNum : 5.0;
   const paceMinutes = Math.floor(paceMinPerKm);
   const paceSecs = Math.round((paceMinPerKm - paceMinutes) * 60);
   const formattedPace = `${paceMinutes}:${paceSecs < 10 ? '0' : ''}${paceSecs} /km`;
+
+  const sessionIdentity = {
+    displayName: user?.displayName || dbProfile?.displayName || null,
+    email: user?.email || null,
+    isAdmin,
+    isFounder: isAdmin,
+    role: isAdmin ? 'founder_admin' : 'athlete',
+    avgPace: formattedPace,
+  };
 
   const handleSendMessage = async (customPrompt?: string) => {
     const query = (customPrompt || input).trim();
@@ -62,10 +70,7 @@ export const AiCoachView: React.FC = () => {
         body: JSON.stringify({
           prompt: query,
           history: messages.slice(-10),
-          userContext: {
-            totalKm: 42,
-            avgPace: formattedPace,
-          },
+          userContext: sessionIdentity,
         }),
       });
 
@@ -111,7 +116,6 @@ export const AiCoachView: React.FC = () => {
 
   return (
     <div id="ai-coach-page-container" className="space-y-8 max-w-6xl mx-auto">
-      {/* Top Banner */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 text-white rounded-3xl p-6 sm:p-10 border border-slate-800 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
@@ -123,7 +127,7 @@ export const AiCoachView: React.FC = () => {
               Pasiya AI Running Coach & Lab
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Your 24/7 endurance science mentor. Get instant tailored training plans, race day split calculations, cadence drills, and recovery nutrition strategies.
+              Your on-demand endurance science mentor. Get instant tailored training plans, race day split calculations, cadence drills, and recovery nutrition strategies.
             </p>
           </div>
 
@@ -162,10 +166,8 @@ export const AiCoachView: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content Areas */}
       {activeSubTab === 'chat' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Preset Prompts Sidebar */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-white flex items-center space-x-2">
               <Zap className="w-4 h-4 text-emerald-400" />
@@ -189,9 +191,7 @@ export const AiCoachView: React.FC = () => {
             </div>
           </div>
 
-          {/* Chat Window */}
           <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl flex flex-col h-[600px]">
-            {/* Header */}
             <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
@@ -219,7 +219,6 @@ export const AiCoachView: React.FC = () => {
               </button>
             </div>
 
-            {/* Message Stream */}
             <div className="flex-1 p-6 overflow-y-auto space-y-4 text-xs sm:text-sm scrollbar-thin">
               {messages.map((m, i) => (
                 <div
@@ -249,7 +248,6 @@ export const AiCoachView: React.FC = () => {
               )}
             </div>
 
-            {/* Input Bar */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -276,7 +274,6 @@ export const AiCoachView: React.FC = () => {
         </div>
       )}
 
-      {/* Pace Calculator Tab */}
       {activeSubTab === 'calculator' && (
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-xl space-y-8 max-w-3xl mx-auto">
           <div>
@@ -350,12 +347,9 @@ export const AiCoachView: React.FC = () => {
               </div>
             </div>
 
-            {/* Output Result Card */}
             <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 flex flex-col justify-center items-center text-center space-y-2">
               <span className="text-xs text-slate-400 font-medium">Required Running Pace</span>
-              <div className="text-4xl font-black font-mono text-emerald-400">
-                {formattedPace}
-              </div>
+              <div className="text-4xl font-black font-mono text-emerald-400">{formattedPace}</div>
               <p className="text-xs text-slate-400">
                 Speed: {(60 / paceMinPerKm).toFixed(2)} km/h • {((60 / paceMinPerKm) * 0.621371).toFixed(2)} mph
               </p>
@@ -376,7 +370,6 @@ export const AiCoachView: React.FC = () => {
         </div>
       )}
 
-      {/* Heart Rate Zones Reference Tab */}
       {activeSubTab === 'zones' && (
         <div className="space-y-4 max-w-4xl mx-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-4">
@@ -426,7 +419,10 @@ export const AiCoachView: React.FC = () => {
                   color: 'text-rose-400 border-rose-500/40 bg-rose-950/20',
                 },
               ].map((z, idx) => (
-                <div key={idx} className={`p-4 rounded-2xl border ${z.color} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                <div
+                  key={idx}
+                  className={`p-4 rounded-2xl border ${z.color} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}
+                >
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                       <span className="font-bold text-sm text-white">{z.zone}</span>
