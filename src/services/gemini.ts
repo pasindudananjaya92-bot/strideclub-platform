@@ -249,15 +249,30 @@ ${identityInstruction(params.userContext)}`,
   }
 }
 
-export async function fetchRunWeather(location: string, date: string): Promise<any> {
+export async function fetchRunWeather(location: string, date: string): Promise<{
+  summary: string;
+  location: string;
+  date: string;
+  tempC?: number;
+  conditions?: string;
+  humidity?: string;
+  wind?: string;
+  runAdvice?: string;
+  sources?: Array<{ title: string; url: string }>;
+}> {
   try {
     if (!process.env.GEMINI_API_KEY) {
-      return { summary: 'Weather offline (no API key)', location, date };
+      return {
+        summary: 'Weather offline (no API key). Check GEMINI_API_KEY on SnapDeploy.',
+        location,
+        date,
+        sources: [],
+      };
     }
 
     const prompt = `Give a short running-focused weather summary for "${location}" on ${date}.
-Respond JSON only:
-{"location":"...","date":"...","tempC":number,"conditions":"...","humidity":"...","wind":"...","runAdvice":"..."}`;
+Respond with JSON only (no markdown):
+{"location":"...","date":"...","tempC":28,"conditions":"Partly cloudy","humidity":"70%","wind":"12 km/h","runAdvice":"Good for easy run; hydrate."}`;
 
     const text = await generateWithRetry(prompt, {
       temperature: 0.2,
@@ -265,14 +280,58 @@ Respond JSON only:
     });
 
     const clean = (text || '{}').replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(clean);
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(clean);
+    } catch {
+      const fallback = (text || '').trim() || 'Weather text unavailable';
+      return {
+        summary: fallback.slice(0, 800),
+        location,
+        date,
+        sources: [],
+      };
+    }
+
+    const tempC = parsed.tempC ?? parsed.temp ?? parsed.temperature;
+    const conditions = parsed.conditions || parsed.condition || parsed.sky || '';
+    const humidity = parsed.humidity || '';
+    const wind = parsed.wind || parsed.windSpeed || '';
+    const runAdvice = parsed.runAdvice || parsed.advice || '';
+
+    const summary =
+      parsed.summary ||
+      [
+        conditions && `Conditions: ${conditions}`,
+        tempC !== undefined && tempC !== null && `Temp: ${tempC}°C`,
+        humidity && `Humidity: ${humidity}`,
+        wind && `Wind: ${wind}`,
+        runAdvice && `Run tip: ${runAdvice}`,
+      ]
+        .filter(Boolean)
+        .join('\n') ||
+      `Weather for ${location} on ${date}: details unavailable`;
+
+    return {
+      summary,
+      location: parsed.location || location,
+      date: parsed.date || date,
+      tempC: typeof tempC === 'number' ? tempC : undefined,
+      conditions,
+      humidity: String(humidity || ''),
+      wind: String(wind || ''),
+      runAdvice: String(runAdvice || ''),
+      sources: Array.isArray(parsed.sources) ? parsed.sources : [],
+    };
   } catch (error: any) {
     console.error('Weather fetch error:', error);
     return {
       location,
       date,
-      summary: 'Weather lookup unavailable',
+      summary: 'Weather lookup unavailable. Dress for the conditions you see outside.',
       runAdvice: 'Dress for the conditions you see outside.',
+      sources: [],
     };
   }
-} 
+}
+ 
