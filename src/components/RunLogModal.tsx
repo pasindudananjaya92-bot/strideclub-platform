@@ -83,6 +83,22 @@ export const RunLogModal: React.FC<RunLogModalProps> = ({
   const totalSeconds = (parseInt(hours || '0', 10) * 3600) + (parseInt(minutes || '0', 10) * 60) + parseInt(seconds || '0', 10);
   const calculatedPace = distNum > 0 && totalSeconds > 0 ? (totalSeconds / 60) / distNum : 0;
 
+  const readJsonSafe = async (res: Response) => {
+    const text = await res.text();
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.startsWith('<') || trimmed.startsWith('<!')) {
+      throw new Error(
+        `Server returned HTML instead of JSON (HTTP ${res.status}). ` +
+          `SnapDeploy may be sleeping or the API crashed — open /api/health, then retry.`
+      );
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      throw new Error(`Invalid JSON from server (HTTP ${res.status}): ${trimmed.slice(0, 120)}`);
+    }
+  };
+
   const handleFetchWeather = async () => {
     if (!weatherLocation.trim()) {
       setWeatherError('Please enter a city or location to search weather for.');
@@ -102,12 +118,10 @@ export const RunLogModal: React.FC<RunLogModalProps> = ({
         }),
       });
 
+      const data = await readJsonSafe(res);
       if (!res.ok) {
-        const errJson = await res.json();
-        throw new Error(errJson.error || 'Failed to retrieve weather');
+        throw new Error(data.error || 'Failed to retrieve weather');
       }
-
-      const data = await res.json();
       setWeatherData(data);
     } catch (err: any) {
       console.error('Weather fetch error:', err);
@@ -163,8 +177,8 @@ export const RunLogModal: React.FC<RunLogModalProps> = ({
         }),
       });
 
+      const data = await readJsonSafe(res);
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || 'Failed to record run');
       }
 
@@ -498,7 +512,7 @@ export const RunLogModal: React.FC<RunLogModalProps> = ({
             <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-800">
               <button
                 type="button"
-                onClick={onClose}
+                onClose={onClose}
                 disabled={submitting}
                 className="px-4 py-2.5 text-xs font-semibold text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
               >
